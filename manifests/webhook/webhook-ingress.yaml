@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-handler-external
+  namespace: webhook-system
+  labels:
+    app: webhook-handler
+spec:
+  selector:
+    app: webhook-handler
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: LoadBalancer  # Change to NodePort if LoadBalancer is not available
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webhook-handler-ingress
+  namespace: webhook-system
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Adjust to your cert issuer
+spec:
+  tls:
+  - hosts:
+    - webhook.yourdomain.com  # Replace with your actual domain
+    secretName: webhook-tls
+  rules:
+  - host: webhook.yourdomain.com  # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: webhook-handler
+            port:
+              number: 80

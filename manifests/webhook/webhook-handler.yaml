@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-system
+  labels:
+    name: webhook-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-secret
+  namespace: webhook-system
+type: Opaque
+stringData:
+  webhook-secret: "CHANGE_ME_IN_PRODUCTION"  # Replace with your actual webhook secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-handler-config
+  namespace: webhook-system
+data:
+  MANIFESTS_PATH: "/app/manifests"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+  labels:
+    app: webhook-handler
+spec:
+  replicas: 2  # For high availability
+  selector:
+    matchLabels:
+      app: webhook-handler
+  template:
+    metadata:
+      labels:
+        app: webhook-handler
+    spec:
+      serviceAccountName: webhook-handler
+      containers:
+      - name: webhook-handler
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secret
+              key: webhook-secret
+        - name: MANIFESTS_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: webhook-handler-config
+              key: MANIFESTS_PATH
+        command:
+        - /bin/bash
+        - -c
+        - |
+          apt-get update && apt-get install -y curl
+          curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && mv kubectl /usr/local/bin/
+          curl -fsSL https://get.docker.com | sh
+          pip install flask
+          python /app/webhook-handler.py
+        volumeMounts:
+        - name: webhook-handler-script
+          mountPath: /app/webhook-handler.py
+          subPath: webhook-handler.py
+        - name: manifests
+          mountPath: /app/manifests
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: kubeconfig
+          mountPath: /root/.kube/config
+          subPath: config
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: webhook-handler-script
+        configMap:
+          name: webhook-handler-script
+          defaultMode: 0755
+      - name: manifests
+        hostPath:
+          path: /home/administrator/k8s-game-2048/manifests  # Update this path
+          type: Directory
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: kubeconfig
+        hostPath:
+          path: /etc/rancher/k3s/k3s.yaml  # Default k3s kubeconfig location
+          type: File
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+  labels:
+    app: webhook-handler
+spec:
+  selector:
+    app: webhook-handler
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-handler
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "secrets", "configmaps", "services"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["serving.knative.dev"]
+  resources: ["services", "revisions"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events", "pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook-handler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: webhook-handler
+subjects:
+- kind: ServiceAccount
+  name: webhook-handler
+  namespace: webhook-system

@@ -1,122 +1,149 @@
 name: Deploy to Development
 
 on:
-  workflow_run:
-    workflows: ["Build and Push Container Image"]
-    types:
-      - completed
-    branches: [ develop ]
   push:
-    branches: [ develop ]
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - 'package.json'
+      - 'manifests/dev/**'
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Image tag to deploy (default: latest)'
-        required: false
-        default: 'latest'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghndrx/k8s-game-2048
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   deploy-dev:
-    name: Deploy to Development
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: development
     
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
       with:
-        version: 'latest'
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Configure kubectl
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
 
-    - name: Set image tag
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Set image tag for deployment
       run: |
-        IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
+        IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        echo "Deploying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
+        echo "🏷️ Using image tag: $IMAGE_TAG"
 
-    - name: Deploy to development
+    - name: Deploy to development via webhook
       run: |
-        echo "🚀 Deploying to development environment..."
+        echo "🚀 Triggering webhook deployment to development..."
         
-        # Apply namespace
-        kubectl apply -f manifests/dev/namespace.yml
+        # Prepare deployment payload
+        PAYLOAD=$(cat <<EOF
+        {
+          "environment": "development",
+          "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}",
+          "namespace": "game-2048-dev",
+          "service_name": "game-2048-dev",
+          "deployment_id": "${{ github.run_id }}-${{ github.run_attempt }}",
+          "commit_sha": "${{ github.sha }}",
+          "triggered_by": "${{ github.actor }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+        )
         
-        # Ensure GHCR secret exists
-        if kubectl get secret ghcr-secret -n default &>/dev/null; then
-          echo "🔐 Copying GHCR secret to dev namespace..."
-          kubectl get secret ghcr-secret -o yaml | \
-          sed 's/namespace: default/namespace: game-2048-dev/' | \
-          sed '/resourceVersion:/d' | \
-          sed '/uid:/d' | \
-          sed '/creationTimestamp:/d' | \
-          kubectl apply -f -
+        # Generate HMAC signature for webhook security
+        SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" -binary | base64)
+        
+        # Send webhook
+        HTTP_CODE=$(curl -s -o /tmp/webhook_response.json -w "%{http_code}" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -H "X-Signature-SHA256: sha256=$SIGNATURE" \
+          -H "X-GitHub-Event: deployment" \
+          -H "X-GitHub-Delivery: ${{ github.run_id }}" \
+          -d "$PAYLOAD" \
+          "${{ secrets.DEV_WEBHOOK_URL }}")
+        
+        echo "Webhook response code: $HTTP_CODE"
+        cat /tmp/webhook_response.json || echo "No response body"
+        
+        if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+          echo "✅ Webhook deployment triggered successfully!"
+        else
+          echo "❌ Webhook deployment failed with code: $HTTP_CODE"
+          exit 1
         fi
-        
-        # Apply the Knative service manifest first
-        kubectl apply -f manifests/dev/service.yml
-        
-        # Update image in service
-        kubectl patch ksvc game-2048-dev -n game-2048-dev --type merge -p '{"spec":{"template":{"spec":{"containers":[{"image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","imagePullPolicy":"Always"}]}}}}'
-        
-        echo "⏳ Waiting for deployment to be ready..."
-        kubectl wait --for=condition=Ready ksvc/game-2048-dev -n game-2048-dev --timeout=300s || echo "⚠️ Service may still be starting"
 
-    - name: Verify deployment
+    - name: Wait for deployment to complete
       run: |
-        echo "📊 Deployment status:"
-        kubectl get ksvc -n game-2048-dev
-        
-        echo ""
-        echo "✅ Development deployment completed!"
-        echo "🌐 Available at: https://2048-dev.wa.darknex.us"
-
-    - name: Run smoke test
-      run: |
-        echo "🧪 Running smoke test..."
+        echo "⏳ Waiting for deployment to stabilize..."
         sleep 30
+
+    - name: Health check
+      run: |
+        echo "🏥 Performing health check..."
+        MAX_RETRIES=10
+        RETRY_COUNT=0
         
-        for i in {1..5}; do
-          echo "Attempt $i/5..."
-          # Test canonical domain first
-          if curl -s --max-time 30 https://game-2048-dev.game-2048-dev.dev.wa.darknex.us/ | grep -q "2048"; then
-            echo "✅ Canonical domain smoke test passed!"
-            break
-          # Fallback to custom domain
-          elif curl -s --max-time 30 https://2048-dev.wa.darknex.us/ | grep -q "2048"; then
-            echo "✅ Custom domain smoke test passed!"
-            break
-          elif [ $i -eq 5 ]; then
-            echo "⚠️ Smoke test failed after 5 attempts"
-            exit 1
+        # Get the canonical Knative domain for health check
+        # Format: service-name.namespace.knative-domain
+        HEALTH_URL="https://game-2048-dev.game-2048-dev.${{ secrets.KNATIVE_DOMAIN }}"
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Checking: $HEALTH_URL"
+          
+          if curl -f -s --max-time 10 "$HEALTH_URL" > /dev/null; then
+            echo "✅ Health check passed!"
+            echo "🌐 Application is available at: $HEALTH_URL"
+            exit 0
           else
-            echo "Retrying in 30 seconds..."
-            sleep 30
+            echo "⚠️ Health check failed, retrying in 15 seconds..."
+            sleep 15
+            RETRY_COUNT=$((RETRY_COUNT + 1))
           fi
         done
+        
+        echo "❌ Health check failed after $MAX_RETRIES attempts"
+        echo "The deployment webhook was sent successfully, but the service is not responding"
+        echo "Please check your cluster logs for deployment issues"
+        exit 1
 
-    - name: Create deployment summary
+    - name: Deployment summary
+      if: always()
       run: |
         echo "## 🚀 Development Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Namespace | ✅ Applied |" >> $GITHUB_STEP_SUMMARY
-        echo "| Service | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-        echo "| Health Check | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔗 URLs" >> $GITHUB_STEP_SUMMARY
-        echo "- **Canonical**: https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- **Custom**: https://2048-dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment:** Development" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Method:** Webhook-based" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "- **Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://game-2048-dev.game-2048-dev.${{ secrets.KNATIVE_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+        fi
