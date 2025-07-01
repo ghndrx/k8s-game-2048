@@ -246,11 +246,14 @@ class Game2048 {
                     const tile = document.createElement('div');
                     tile.className = `tile tile-${this.grid[row][col]}`;
                     tile.textContent = this.grid[row][col];
-                    tile.style.left = `${col * 124.25}px`;
-                    tile.style.top = `${row * 124.25}px`;
+                    
+                    // Use CSS Grid positioning instead of absolute positioning
+                    tile.style.gridColumn = `${col + 1}`;
+                    tile.style.gridRow = `${row + 1}`;
                     
                     if (this.grid[row][col] > 2048) {
                         tile.className = 'tile tile-super';
+                        tile.textContent = this.grid[row][col];
                     }
                     
                     container.appendChild(tile);
