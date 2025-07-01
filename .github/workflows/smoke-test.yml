@@ -1,0 +1,270 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run smoke tests every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test (dev, staging, prod, all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - dev
+        - staging
+        - prod
+
+jobs:
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: 
+          - ${{ github.event.inputs.environment == 'all' && 'dev' || github.event.inputs.environment || 'dev' }}
+          - ${{ github.event.inputs.environment == 'all' && 'staging' || '' }}
+          - ${{ github.event.inputs.environment == 'all' && 'prod' || '' }}
+        exclude:
+          - environment: ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set environment variables
+      run: |
+        case "${{ matrix.environment }}" in
+          dev)
+            echo "DOMAIN=2048-dev.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=development" >> $GITHUB_ENV
+            ;;
+          staging)
+            echo "DOMAIN=2048-staging.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=staging" >> $GITHUB_ENV
+            ;;
+          prod)
+            echo "DOMAIN=2048.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=production" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Test SSL Certificate
+      run: |
+        echo "🔒 Testing SSL certificate for ${{ env.DOMAIN }}"
+        
+        # Check SSL certificate validity
+        cert_info=$(echo | openssl s_client -servername ${{ env.DOMAIN }} -connect ${{ env.DOMAIN }}:443 2>/dev/null | openssl x509 -noout -dates)
+        echo "Certificate info: $cert_info"
+        
+        # Check if certificate is valid for at least 30 days
+        expiry_date=$(echo | openssl s_client -servername ${{ env.DOMAIN }} -connect ${{ env.DOMAIN }}:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+        expiry_epoch=$(date -d "$expiry_date" +%s)
+        current_epoch=$(date +%s)
+        days_until_expiry=$(( (expiry_epoch - current_epoch) / 86400 ))
+        
+        echo "Days until certificate expiry: $days_until_expiry"
+        
+        if [ $days_until_expiry -lt 30 ]; then
+          echo "❌ Certificate expires in less than 30 days!"
+          exit 1
+        else
+          echo "✅ Certificate is valid for $days_until_expiry days"
+        fi
+
+    - name: Test Domain Accessibility
+      run: |
+        echo "🌐 Testing domain accessibility for ${{ env.DOMAIN }}"
+        
+        # Test HTTPS access
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.DOMAIN }}/)
+        echo "HTTP response code: $response_code"
+        
+        if [ "$response_code" != "200" ]; then
+          echo "❌ Domain ${{ env.DOMAIN }} returned HTTP $response_code"
+          exit 1
+        else
+          echo "✅ Domain ${{ env.DOMAIN }} is accessible"
+        fi
+
+    - name: Test Content Validation
+      run: |
+        echo "📄 Testing content validation for ${{ env.DOMAIN }}"
+        
+        # Download the page content
+        content=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/)
+        
+        # Check if it contains expected 2048 game elements
+        if echo "$content" | grep -q "2048"; then
+          echo "✅ Page contains '2048' title"
+        else
+          echo "❌ Page does not contain '2048' title"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "HOW TO PLAY"; then
+          echo "✅ Page contains game instructions"
+        else
+          echo "❌ Page does not contain game instructions"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "Environment.*${{ env.ENV_NAME }}"; then
+          echo "✅ Page shows correct environment: ${{ env.ENV_NAME }}"
+        else
+          echo "⚠️  Environment indicator not found or incorrect"
+        fi
+        
+        # Check if CSS and JS files are referenced
+        if echo "$content" | grep -q "style.css"; then
+          echo "✅ CSS file is referenced"
+        else
+          echo "❌ CSS file is not referenced"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "script.js"; then
+          echo "✅ JavaScript file is referenced"
+        else
+          echo "❌ JavaScript file is not referenced"
+          exit 1
+        fi
+
+    - name: Test Redirect Behavior
+      run: |
+        echo "🔄 Testing redirect behavior for ${{ env.DOMAIN }}"
+        
+        # Test if custom domain redirects properly (allow redirects but capture them)
+        redirect_info=$(curl -s -I -L --max-time 30 https://${{ env.DOMAIN }}/ | grep -E "(HTTP|Location)")
+        echo "Redirect chain:"
+        echo "$redirect_info"
+        
+        # Check final destination
+        final_url=$(curl -s -o /dev/null -w "%{url_effective}" -L --max-time 30 https://${{ env.DOMAIN }}/)
+        echo "Final URL: $final_url"
+        
+        # Verify we can access the canonical domain directly
+        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        if [ "$canonical_response" = "200" ]; then
+          echo "✅ Canonical domain ${{ env.CANONICAL_DOMAIN }} is accessible"
+        else
+          echo "❌ Canonical domain ${{ env.CANONICAL_DOMAIN }} returned HTTP $canonical_response"
+          exit 1
+        fi
+
+    - name: Test Performance
+      run: |
+        echo "⚡ Testing performance for ${{ env.DOMAIN }}"
+        
+        # Measure response time
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.DOMAIN }}/)
+        echo "Response time: ${response_time}s"
+        
+        # Check if response time is reasonable (under 10 seconds)
+        if (( $(echo "$response_time < 10.0" | bc -l) )); then
+          echo "✅ Response time is acceptable"
+        else
+          echo "⚠️  Response time is slow: ${response_time}s"
+        fi
+        
+        # Check content size
+        content_size=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/ | wc -c)
+        echo "Content size: $content_size bytes"
+        
+        if [ $content_size -gt 1000 ]; then
+          echo "✅ Content size is reasonable"
+        else
+          echo "❌ Content size is too small: $content_size bytes"
+          exit 1
+        fi
+
+  test-infrastructure:
+    name: Infrastructure Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'all' || github.event.inputs.environment == '' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test DNS Resolution
+      run: |
+        echo "🌐 Testing DNS resolution"
+        
+        domains=("2048-dev.wa.darknex.us" "2048-staging.wa.darknex.us" "2048.wa.darknex.us")
+        
+        for domain in "${domains[@]}"; do
+          echo "Testing DNS for $domain"
+          ip=$(dig +short $domain)
+          if [ -n "$ip" ]; then
+            echo "✅ $domain resolves to: $ip"
+          else
+            echo "❌ $domain does not resolve"
+            exit 1
+          fi
+        done
+
+    - name: Test SSL Certificate Chain
+      run: |
+        echo "🔐 Testing SSL certificate chains"
+        
+        domains=("2048-dev.wa.darknex.us" "2048-staging.wa.darknex.us" "2048.wa.darknex.us")
+        
+        for domain in "${domains[@]}"; do
+          echo "Testing SSL chain for $domain"
+          
+          # Test certificate chain
+          chain_result=$(echo | openssl s_client -servername $domain -connect $domain:443 -verify_return_error 2>&1)
+          
+          if echo "$chain_result" | grep -q "Verify return code: 0"; then
+            echo "✅ $domain has valid SSL certificate chain"
+          else
+            echo "❌ $domain has invalid SSL certificate chain"
+            echo "$chain_result"
+            exit 1
+          fi
+        done
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [smoke-tests, test-infrastructure]
+    if: always()
+    
+    steps:
+    - name: Check test results
+      run: |
+        if [ "${{ needs.smoke-tests.result }}" = "success" ] && [ "${{ needs.test-infrastructure.result }}" = "success" ]; then
+          echo "✅ All tests passed successfully!"
+          echo "🎮 2048 game is working correctly across all environments"
+        else
+          echo "❌ Some tests failed"
+          echo "Smoke tests: ${{ needs.smoke-tests.result }}"
+          echo "Infrastructure tests: ${{ needs.test-infrastructure.result }}"
+          exit 1
+        fi
+
+    - name: Post summary
+      if: always()
+      run: |
+        echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Infrastructure Tests | ${{ needs.test-infrastructure.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Tested Domains" >> $GITHUB_STEP_SUMMARY
+        echo "- 🧪 Development: https://2048-dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎭 Staging: https://2048-staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 Production: https://2048.wa.darknex.us" >> $GITHUB_STEP_SUMMARY

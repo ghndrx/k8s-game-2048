@@ -1,0 +1,119 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: game-2048-dev-proxy
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Host game-2048-dev.game-2048-dev.dev.wa.darknex.us;
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - 2048-dev.wa.darknex.us
+    secretName: game-2048-dev-nginx-tls
+  rules:
+  - host: 2048-dev.wa.darknex.us
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: istio-nodeport-service
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: game-2048-staging-proxy
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Host game-2048-staging.game-2048-staging.staging.wa.darknex.us;
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - 2048-staging.wa.darknex.us
+    secretName: game-2048-staging-nginx-tls
+  rules:
+  - host: 2048-staging.wa.darknex.us
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: istio-nodeport-service
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: game-2048-prod-proxy
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Host game-2048-prod.game-2048-prod.wa.darknex.us;
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - 2048.wa.darknex.us
+    secretName: game-2048-prod-nginx-tls
+  rules:
+  - host: 2048.wa.darknex.us
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: istio-nodeport-service
+            port:
+              number: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio-nodeport-service
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: 32135
+    protocol: TCP
+  clusterIP: None
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: istio-nodeport-service
+  namespace: default
+subsets:
+- addresses:
+  - ip: 192.168.4.134  # Your k3s node IP
+  ports:
+  - name: http
+    port: 32135

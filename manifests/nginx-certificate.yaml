@@ -1,0 +1,40 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: game-2048-dev-nginx-cert
+  namespace: default
+spec:
+  secretName: game-2048-dev-nginx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - "2048-dev.wa.darknex.us"
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: game-2048-staging-nginx-cert
+  namespace: default
+spec:
+  secretName: game-2048-staging-nginx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - "2048-staging.wa.darknex.us"
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: game-2048-prod-nginx-cert
+  namespace: default
+spec:
+  secretName: game-2048-prod-nginx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - "2048.wa.darknex.us"

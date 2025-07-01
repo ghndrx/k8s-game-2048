@@ -1,33 +1,95 @@
 name: Deploy to Staging
 
 on:
-  push:
-    branches: [ staging ]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghndrx/k8s-game-2048
 
 jobs:
-  build-and-deploy:
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+    environment: staging
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        version: 'latest'
 
-    - name: Extract metadata
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Set image tag
+      run: |
+        IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "Deploying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
+
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        
+        # Apply namespace
+        kubectl apply -f manifests/staging/namespace.yml
+        
+        # Ensure GHCR secret exists
+        if kubectl get secret ghcr-secret -n default &>/dev/null; then
+          echo "🔐 Copying GHCR secret to staging namespace..."
+          kubectl get secret ghcr-secret -o yaml | \
+          sed 's/namespace: default/namespace: game-2048-staging/' | \
+          sed '/resourceVersion:/d' | \
+          sed '/uid:/d' | \
+          sed '/creationTimestamp:/d' | \
+          kubectl apply -f -
+        fi
+        
+        # Update image in service and deploy
+        kubectl patch ksvc game-2048-staging -n game-2048-staging --type merge -p '{"spec":{"template":{"spec":{"containers":[{"image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","imagePullPolicy":"Always"}]}}}}'
+        
+        echo "⏳ Waiting for deployment to be ready..."
+        kubectl wait --for=condition=Ready ksvc/game-2048-staging -n game-2048-staging --timeout=300s || echo "⚠️ Service may still be starting"
+
+    - name: Verify deployment
+      run: |
+        echo "📊 Deployment status:"
+        kubectl get ksvc -n game-2048-staging
+        
+        echo ""
+        echo "✅ Staging deployment completed!"
+        echo "🌐 Available at: https://2048-staging.wa.darknex.us"
+
+    - name: Run smoke test
+      run: |
+        echo "🧪 Running smoke test..."
+        sleep 30
+        
+        for i in {1..5}; do
+          echo "Attempt $i/5..."
+          if curl -s --max-time 30 https://2048-staging.wa.darknex.us/ | grep -q "2048"; then
+            echo "✅ Smoke test passed!"
+            break
+          elif [ $i -eq 5 ]; then
+            echo "⚠️ Smoke test failed after 5 attempts"
+            exit 1
+          else
+            echo "Retrying in 30 seconds..."
+            sleep 30
+          fi
+        done
       id: meta
       uses: docker/metadata-action@v5
       with:

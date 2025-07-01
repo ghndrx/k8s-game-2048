@@ -1,40 +1,49 @@
 # K8s Game 2048
 
-A Kubernetes deployment of the classic 2048 game using Knative Serving with Kourier ingress controller.
+A Kubernetes deployment of the classic 2048 game using Knative Serving with Istio service mesh and nginx ingress for SSL termination.
 
 ## Features
 
 - **Knative Serving**: Serverless deployment with scale-to-zero capability
-- **Kourier Gateway**: Lightweight ingress controller for Knative
+- **Istio Service Mesh**: Advanced traffic management and observability
+- **nginx Ingress**: SSL termination and traffic routing
 - **Multi-environment**: Development, Staging, and Production deployments
-- **Custom Domains**: Environment-specific domain configuration
+- **Custom Domains with SSL**: Environment-specific HTTPS domains
 - **GitOps Workflow**: Complete CI/CD pipeline with GitHub Actions
 
 ## Environments
 
-- **Development**: `2048-dev.wa.darknex.us`
-- **Staging**: `2048-staging.wa.darknex.us`
-- **Production**: `2048.wa.darknex.us`
+- **Development**: `https://2048-dev.wa.darknex.us`
+- **Staging**: `https://2048-staging.wa.darknex.us`
+- **Production**: `https://2048.wa.darknex.us`
 
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Kourier       │    │   Knative       │    │   2048 Game     │
-│   Gateway       │───▶│   Service       │───▶│   Container     │
-│                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Internet  │    │   nginx     │    │   Istio     │    │   Knative   │
+│             │───▶│   Ingress   │───▶│   Gateway   │───▶│   Service   │
+│             │    │ (SSL Term.) │    │             │    │             │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+                           │                                     │
+                           ▼                                     ▼
+                   ┌─────────────┐                      ┌─────────────┐
+                   │ cert-manager│                      │ 2048 Game   │
+                   │ Let's Encrypt│                      │ Container   │
+                   └─────────────┘                      └─────────────┘
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Kubernetes cluster (1.21+)
+- Kubernetes cluster (1.21+) with k3s or similar
 - Knative Serving installed
-- Kourier as the networking layer
+- Istio service mesh installed  
+- nginx ingress controller installed
+- cert-manager for SSL certificates
 - kubectl configured
-- Domain DNS configured to point to Kourier LoadBalancer
+- Domain DNS configured to point to your cluster IP
 
 ### Installation
 
@@ -44,9 +53,16 @@ git clone https://github.com/ghndrx/k8s-game-2048.git
 cd k8s-game-2048
 ```
 
-2. Deploy to development:
+2. Deploy all environments:
 ```bash
-kubectl apply -f manifests/dev/
+./scripts/deploy.sh all
+```
+
+3. Or deploy a specific environment:
+```bash
+./scripts/deploy.sh dev     # Development only
+./scripts/deploy.sh staging # Staging only  
+./scripts/deploy.sh prod    # Production only
 ```
 
 3. Deploy to staging:

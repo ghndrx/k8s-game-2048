@@ -9,45 +9,18 @@ metadata:
 spec:
   template:
     metadata:
-      labels:
-        app: game-2048
-        environment: production
       annotations:
-        # Scale to zero configuration
         autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "50"
-        autoscaling.knative.dev/scaleDownDelay: "300s"
+        autoscaling.knative.dev/maxScale: "10"
         autoscaling.knative.dev/target: "100"
     spec:
       containers:
-      - name: game-2048
-        image: ghcr.io/ghndrx/k8s-game-2048:latest
+      - image: ghcr.io/ghndrx/k8s-game-2048:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 8080
-          protocol: TCP
+        - containerPort: 80
         env:
         - name: ENVIRONMENT
           value: "production"
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            cpu: 2000m
-            memory: 1Gi
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 20
-  traffic:
-  - percent: 100
-    latestRevision: true
+      imagePullSecrets:
+      - name: ghcr-secret
