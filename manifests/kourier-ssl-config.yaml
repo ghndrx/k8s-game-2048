@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-kourier
+  namespace: knative-serving
+data:
+  _example: |
+    ################################
+    #                              #
+    #    EXAMPLE CONFIGURATION     #
+    #                              #
+    ################################
+  enable-service-links: "false"
+  # Enable automatic HTTP to HTTPS redirect
+  ssl-redirect: "true"

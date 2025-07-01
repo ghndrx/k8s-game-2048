@@ -6,14 +6,6 @@ metadata:
   labels:
     app: game-2048
     environment: development
-  annotations:
-    # Scale to zero configuration
-    autoscaling.knative.dev/minScale: "0"
-    autoscaling.knative.dev/maxScale: "10"
-    # Scale down to zero after 30 seconds of no traffic
-    autoscaling.knative.dev/scaleDownDelay: "30s"
-    # Target concurrency per pod
-    autoscaling.knative.dev/target: "100"
 spec:
   template:
     metadata:
@@ -30,6 +22,7 @@ spec:
       containers:
       - name: game-2048
         image: ghcr.io/ghndrx/k8s-game-2048:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
           protocol: TCP
@@ -45,7 +38,7 @@ spec:
             memory: 256Mi
         readinessProbe:
           httpGet:
-            path: /health
+            path: /
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
