@@ -26,7 +26,7 @@ h1.title {
 }
 
 .container {
-    width: 512px;
+    width: 580px;
     margin: 0 auto;
     padding: 20px;
 }
@@ -387,15 +387,15 @@ h1.title {
 }
 
 /* Additional responsive improvements */
-@media screen and (max-width: 600px) {
+@media screen and (max-width: 640px) {
     body {
         padding: 20px 10px;
     }
     
     .container {
         width: 100%;
-        max-width: 480px;
-        padding: 10px;
+        max-width: 520px;
+        padding: 15px;
     }
     
     .header h1 {
@@ -407,5 +407,6 @@ h1.title {
         max-width: 480px;
         height: auto;
         aspect-ratio: 1;
+        margin: 0 auto;
     }
 }
