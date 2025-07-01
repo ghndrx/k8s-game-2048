@@ -59,20 +59,8 @@ jobs:
       run: |
         echo "🚀 Triggering webhook deployment to development..."
         
-        # Prepare deployment payload
-        PAYLOAD=$(cat <<EOF
-        {
-          "environment": "development",
-          "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}",
-          "namespace": "game-2048-dev",
-          "service_name": "game-2048-dev",
-          "deployment_id": "${{ github.run_id }}-${{ github.run_attempt }}",
-          "commit_sha": "${{ github.sha }}",
-          "triggered_by": "${{ github.actor }}",
-          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        }
-        EOF
-        )
+        # Prepare deployment payload (compact JSON to avoid whitespace issues)
+        PAYLOAD='{"environment":"development","image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","namespace":"game-2048-dev","service_name":"game-2048-dev","deployment_id":"${{ github.run_id }}-${{ github.run_attempt }}","commit_sha":"${{ github.sha }}","triggered_by":"${{ github.actor }}","timestamp":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}'
         
         # Generate HMAC signature for webhook security
         SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" | sed 's/^.* //')
