@@ -1,0 +1,81 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghndrx/k8s-game-2048
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix=staging-
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Update image in manifests
+      run: |
+        sed -i "s|ghcr.io/ghndrx/k8s-game-2048:staging|${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}|g" manifests/staging/service.yml
+
+    - name: Deploy to staging
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl apply -f manifests/staging/
+
+    - name: Wait for deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl wait --for=condition=Ready ksvc/game-2048-staging -n game-2048-staging --timeout=300s
+
+    - name: Run smoke tests
+      run: |
+        # Wait a bit for the service to be fully ready
+        sleep 30
+        # Test the staging URL
+        curl -f https://2048-staging.wa.darknex.us/ || exit 1
+
+    - name: Get service URL
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get ksvc game-2048-staging -n game-2048-staging -o jsonpath='{.status.url}'

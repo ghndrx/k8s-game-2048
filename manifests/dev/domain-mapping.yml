@@ -1,0 +1,13 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: DomainMapping
+metadata:
+  name: 2048-dev.wa.darknex.us
+  namespace: game-2048-dev
+  labels:
+    app: game-2048
+    environment: development
+spec:
+  ref:
+    name: game-2048-dev
+    kind: Service
+    apiVersion: serving.knative.dev/v1

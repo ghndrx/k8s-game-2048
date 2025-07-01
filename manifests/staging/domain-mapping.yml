@@ -1,0 +1,13 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: DomainMapping
+metadata:
+  name: 2048-staging.wa.darknex.us
+  namespace: game-2048-staging
+  labels:
+    app: game-2048
+    environment: staging
+spec:
+  ref:
+    name: game-2048-staging
+    kind: Service
+    apiVersion: serving.knative.dev/v1

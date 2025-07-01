@@ -1,0 +1,103 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghndrx/k8s-game-2048
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=tag
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Update image in manifests
+      run: |
+        TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+        sed -i "s|ghcr.io/ghndrx/k8s-game-2048:v1.0.0|${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}|g" manifests/prod/service.yml
+
+    - name: Deploy to production with blue-green strategy
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Deploy new revision with 0% traffic
+        kubectl apply -f manifests/prod/
+        
+        # Wait for new revision to be ready
+        kubectl wait --for=condition=Ready ksvc/game-2048-prod -n game-2048-prod --timeout=300s
+        
+        # Get the latest revision name
+        LATEST_REVISION=$(kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.latestReadyRevisionName}')
+        
+        # Gradually shift traffic (10%, 50%, 100%)
+        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"revisionName":"'$LATEST_REVISION'","percent":10},{"latestRevision":false,"percent":90}]}}'
+        sleep 60
+        
+        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"revisionName":"'$LATEST_REVISION'","percent":50},{"latestRevision":false,"percent":50}]}}'
+        sleep 60
+        
+        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"latestRevision":true,"percent":100}]}}'
+
+    - name: Run production health checks
+      run: |
+        # Wait for traffic to stabilize
+        sleep 60
+        # Test the production URL
+        curl -f https://2048.wa.darknex.us/ || exit 1
+        # Additional health checks can be added here
+
+    - name: Get service URL
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.url}'

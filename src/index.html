@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2048 Game - Knative Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>2048</h1>
+            <div class="environment-badge" id="env-badge"></div>
+            <div class="scores-container">
+                <div class="score-container">
+                    <div class="score-title">SCORE</div>
+                    <div class="score" id="score">0</div>
+                </div>
+                <div class="score-container">
+                    <div class="score-title">BEST</div>
+                    <div class="score" id="best">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="above-game">
+            <p class="game-intro">
+                <strong>HOW TO PLAY:</strong> Use your <strong>arrow keys</strong> to move the tiles. 
+                When two tiles with the same number touch, they <strong>merge into one!</strong>
+            </p>
+            <button class="restart-button" id="restart-button">New Game</button>
+        </div>
+
+        <div class="game-container">
+            <div class="game-message" id="game-message">
+                <p></p>
+                <div class="lower">
+                    <button class="keep-playing-button" id="keep-playing-button">Keep going</button>
+                    <button class="retry-button" id="retry-button">Try again</button>
+                </div>
+            </div>
+
+            <div class="grid-container">
+                <div class="grid-row">
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                </div>
+                <div class="grid-row">
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                </div>
+                <div class="grid-row">
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                </div>
+                <div class="grid-row">
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                    <div class="grid-cell"></div>
+                </div>
+            </div>
+
+            <div class="tile-container" id="tile-container"></div>
+        </div>
+
+        <div class="game-explanation">
+            <p><strong>Knative Edition:</strong> This game is deployed using Knative Serving with scale-to-zero capabilities on Kubernetes!</p>
+            <p>Environment: <span id="environment">Production</span></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

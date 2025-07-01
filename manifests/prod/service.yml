@@ -1,0 +1,60 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: game-2048-prod
+  namespace: game-2048-prod
+  labels:
+    app: game-2048
+    environment: production
+  annotations:
+    # Scale to zero configuration
+    autoscaling.knative.dev/minScale: "0"
+    autoscaling.knative.dev/maxScale: "50"
+    # Scale down to zero after 5 minutes of no traffic (longer for production)
+    autoscaling.knative.dev/scaleDownDelay: "300s"
+    # Target concurrency per pod
+    autoscaling.knative.dev/target: "100"
+spec:
+  template:
+    metadata:
+      labels:
+        app: game-2048
+        environment: production
+      annotations:
+        # Scale to zero configuration
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "50"
+        autoscaling.knative.dev/scaleDownDelay: "300s"
+        autoscaling.knative.dev/target: "100"
+    spec:
+      containers:
+      - name: game-2048
+        image: ghcr.io/ghndrx/k8s-game-2048:v1.0.0
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+  traffic:
+  - percent: 100
+    latestRevision: true
