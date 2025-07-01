@@ -5,9 +5,9 @@ on:
     workflows: ["Build and Push Container Image"]
     types:
       - completed
-    branches: [ main ]
+    branches: [ develop ]
   push:
-    branches: [ main ]
+    branches: [ develop ]
   workflow_dispatch:
     inputs:
       image_tag:
