@@ -6,13 +6,25 @@ on:
     types:
       - completed
     branches: [ staging ]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "PROMOTE" to confirm staging → production promotion'
+        required: true
+      skip_tests:
+        description: 'Skip staging tests (use only if staging is already validated)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   test-staging-and-promote-to-main:
     name: Test Staging and Promote to Main
     runs-on: ubuntu-latest
     environment: staging
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'PROMOTE') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     
     steps:
     - name: Checkout repository
@@ -21,13 +33,23 @@ jobs:
         ref: staging
 
     - name: Wait for staging smoke test results to settle
+      if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests == 'false')
       run: |
         echo "⏳ Staging smoke tests completed, proceeding with production promotion..."
         sleep 30
 
     - name: Verify staging smoke tests passed
+      if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests == 'false')
       run: |
         echo "✅ Staging smoke tests passed - proceeding with auto-promotion to production"
+
+    - name: Manual promotion confirmation
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        echo "🔒 Manual promotion to production confirmed"
+        echo "📋 Trigger: ${{ github.event_name }}"
+        echo "🎯 Confirmation: ${{ github.event.inputs.confirmation }}"
+        echo "⚡ Skip tests: ${{ github.event.inputs.skip_tests }}"
 
     - name: Auto-promote staging to main branch
       uses: actions/github-script@v7
