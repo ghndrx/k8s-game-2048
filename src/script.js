@@ -246,8 +246,8 @@ class Game2048 {
                     const tile = document.createElement('div');
                     tile.className = `tile tile-${this.grid[row][col]}`;
                     tile.textContent = this.grid[row][col];
-                    tile.style.left = `${col * 121.25}px`;
-                    tile.style.top = `${row * 121.25}px`;
+                    tile.style.left = `${col * 124.25}px`;
+                    tile.style.top = `${row * 124.25}px`;
                     
                     if (this.grid[row][col] > 2048) {
                         tile.className = 'tile tile-super';
