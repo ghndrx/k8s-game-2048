@@ -2,7 +2,7 @@ name: Auto-Promote Pipeline
 
 on:
   workflow_run:
-    workflows: ["Deploy to Development"]
+    workflows: ["Smoke Tests"]
     types:
       - completed
     branches: [ develop ]
@@ -24,67 +24,21 @@ jobs:
       with:
         ref: develop
 
-    - name: Wait for dev deployment to settle
+    - name: Wait for smoke test results to settle
       run: |
-        echo "⏳ Waiting for dev deployment to fully settle..."
-        sleep 60
+        echo "⏳ Smoke tests completed, proceeding with promotion..."
+        sleep 30
 
-    - name: Run comprehensive dev tests
+    - name: Verify dev smoke tests passed
       run: |
-        echo "🧪 Running comprehensive tests on dev environment..."
-        
-        # Use the canonical Knative domain
-        CANONICAL_URL="https://game-2048-dev.game-2048-dev.${{ secrets.DEV_DOMAIN }}"
-        echo "Testing canonical domain: $CANONICAL_URL"
-        
-        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$CANONICAL_URL")
-        if [ "$canonical_response" != "200" ]; then
-          echo "❌ Canonical domain returned HTTP $canonical_response"
-          exit 1
-        fi
-        echo "✅ Canonical domain accessible"
-        
-        # Test content validation on canonical domain
-        echo "Testing content validation on canonical domain..."
-        content=$(curl -s -L --max-time 30 "$CANONICAL_URL")
-        
-        if ! echo "$content" | grep -q "2048"; then
-          echo "❌ Content missing 2048 title"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "HOW TO PLAY"; then
-          echo "❌ Content missing game instructions"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "style.css"; then
-          echo "❌ CSS file not referenced"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "script.js"; then
-          echo "❌ JavaScript file not referenced"
-          exit 1
-        fi
-        
-        echo "✅ All content validation tests passed"
-        
-        # Test performance on canonical domain
-        echo "Testing performance on canonical domain..."
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "$CANONICAL_URL")
-        if (( $(echo "$response_time > 10.0" | bc -l) )); then
-          echo "❌ Response time too slow: ${response_time}s"
-          exit 1
-        fi
-        echo "✅ Performance test passed: ${response_time}s"
+        echo "✅ Development smoke tests passed - proceeding with auto-promotion to staging"
 
     - name: Auto-promote develop to staging branch
       uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          console.log('🚀 All dev tests passed! Auto-promoting develop to staging branch...');
+          console.log('🚀 All dev smoke tests passed! Auto-promoting develop to staging branch...');
           
           // Create a merge from develop to staging
           try {

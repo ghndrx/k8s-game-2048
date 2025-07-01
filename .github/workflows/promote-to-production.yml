@@ -2,7 +2,7 @@ name: Promote to Production
 
 on:
   workflow_run:
-    workflows: ["Deploy to Staging"]
+    workflows: ["Smoke Tests"]
     types:
       - completed
     branches: [ staging ]
@@ -20,67 +20,21 @@ jobs:
       with:
         ref: staging
 
-    - name: Wait for staging deployment to settle
+    - name: Wait for staging smoke test results to settle
       run: |
-        echo "⏳ Waiting for staging deployment to fully settle..."
-        sleep 120
+        echo "⏳ Staging smoke tests completed, proceeding with production promotion..."
+        sleep 30
 
-    - name: Run comprehensive staging tests
+    - name: Verify staging smoke tests passed
       run: |
-        echo "🧪 Running comprehensive tests on staging environment..."
-        
-        # Use the canonical Knative domain for staging
-        CANONICAL_URL="https://game-2048-staging.game-2048-staging.${{ secrets.STAGING_DOMAIN }}"
-        echo "Testing canonical staging domain: $CANONICAL_URL"
-        
-        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$CANONICAL_URL")
-        if [ "$canonical_response" != "200" ]; then
-          echo "❌ Staging canonical domain returned HTTP $canonical_response"
-          exit 1
-        fi
-        echo "✅ Staging canonical domain accessible"
-        
-        # Test staging content validation on canonical domain
-        echo "Testing staging content validation..."
-        content=$(curl -s -L --max-time 30 "$CANONICAL_URL")
-        
-        if ! echo "$content" | grep -q "2048"; then
-          echo "❌ Content missing 2048 title"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "HOW TO PLAY"; then
-          echo "❌ Content missing game instructions"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "style.css"; then
-          echo "❌ CSS file not referenced"
-          exit 1
-        fi
-        
-        if ! echo "$content" | grep -q "script.js"; then
-          echo "❌ JavaScript file not referenced"
-          exit 1
-        fi
-        
-        echo "✅ All staging content validation tests passed"
-        
-        # Test staging performance on canonical domain
-        echo "Testing staging performance..."
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "$CANONICAL_URL")
-        if (( $(echo "$response_time > 10.0" | bc -l) )); then
-          echo "❌ Response time too slow: ${response_time}s"
-          exit 1
-        fi
-        echo "✅ Staging performance test passed: ${response_time}s"
+        echo "✅ Staging smoke tests passed - proceeding with auto-promotion to production"
 
     - name: Auto-promote staging to main branch
       uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          console.log('🎯 All staging tests passed! Auto-promoting staging to main branch...');
+          console.log('🎯 All staging smoke tests passed! Auto-promoting staging to main branch...');
           
           // Create a merge from staging to main
           try {

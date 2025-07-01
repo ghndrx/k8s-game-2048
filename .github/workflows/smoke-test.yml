@@ -1,10 +1,11 @@
 name: Smoke Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["Deploy to Development", "Deploy to Staging", "Deploy to Production"]
+    types:
+      - completed
+    branches: [ develop, staging, main ]
   schedule:
     # Run smoke tests every 6 hours
     - cron: '0 */6 * * *'
