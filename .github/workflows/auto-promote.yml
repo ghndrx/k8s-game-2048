@@ -7,6 +7,10 @@ on:
       - completed
     branches: [ develop ]
 
+permissions:
+  actions: write
+  contents: write
+
 jobs:
   test-and-promote-to-staging:
     name: Test Dev and Auto-Promote to Staging
