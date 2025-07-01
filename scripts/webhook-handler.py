@@ -53,8 +53,16 @@ def pull_image(image):
 
 def apply_manifests(environment):
     """Apply Kubernetes manifests for environment"""
-    manifest_dir = f"{MANIFESTS_PATH}/{environment}"
-    logger.info(f"Applying manifests from: {manifest_dir}")
+    # Map environment names to manifest directories
+    env_mapping = {
+        'development': 'dev',
+        'staging': 'staging', 
+        'production': 'prod'
+    }
+    
+    manifest_env = env_mapping.get(environment, environment)
+    manifest_dir = f"{MANIFESTS_PATH}/{manifest_env}"
+    logger.info(f"Applying manifests from: {manifest_dir} (environment: {environment})")
     
     if not os.path.exists(manifest_dir):
         raise FileNotFoundError(f"Manifest directory not found: {manifest_dir}")
@@ -165,12 +173,35 @@ def implement_blue_green_deployment(service_name, namespace, traffic_split):
 def deploy():
     """Main webhook endpoint for deployments"""
     try:
-        # Verify signature (temporarily disabled for testing)
+        # Verify signature
         signature = request.headers.get('X-Signature-SHA256')
-        # if not verify_signature(request.data, signature):
-        #     logger.warning("Invalid webhook signature")
-        #     return jsonify({"error": "Invalid signature"}), 401
-        logger.info(f"Webhook called with signature: {signature}")
+        payload = request.data
+        
+        logger.info(f"Received webhook request")
+        logger.info(f"Signature header: {signature}")
+        logger.info(f"Payload length: {len(payload)} bytes")
+        logger.info(f"Payload: {payload.decode('utf-8')[:200]}...")
+        
+        # Test signature verification with debug
+        if signature:
+            expected = hmac.new(
+                WEBHOOK_SECRET.encode('utf-8'),
+                payload,
+                hashlib.sha256
+            ).hexdigest()
+            expected_full = f"sha256={expected}"
+            logger.info(f"Expected signature: {expected_full}")
+            logger.info(f"Received signature: {signature}")
+            logger.info(f"Signatures match: {hmac.compare_digest(expected_full, signature)}")
+            
+            if not verify_signature(payload, signature):
+                logger.warning("Invalid webhook signature")
+                return jsonify({"error": "Invalid signature"}), 401
+        else:
+            logger.warning("No signature header found")
+            return jsonify({"error": "No signature provided"}), 401
+        
+        logger.info(f"Signature verification passed")
         
         # Parse payload
         data = request.json
@@ -199,8 +230,8 @@ def deploy():
         logger.info(f"Service: {service_name}")
         logger.info(f"Strategy: {deployment_strategy}")
         
-        # Step 1: Pull the Docker image
-        pull_image(image)
+        # Step 1: Skip Docker pull for Knative (Knative handles image pulling)
+        logger.info("Skipping Docker pull step (Knative handles image pulling)")
         
         # Step 2: Apply manifests
         apply_manifests(environment)
