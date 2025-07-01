@@ -1,6 +1,8 @@
 name: Deploy to Staging
 
 on:
+  push:
+    branches: [ staging ]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -8,10 +10,10 @@ on:
         required: false
         default: 'latest'
   workflow_run:
-    workflows: ["Deploy to Development"]
+    workflows: ["Auto-Promote Pipeline"]
     types:
       - completed
-    branches: [ main, master ]
+    branches: [ staging ]
 
 env:
   REGISTRY: ghcr.io
