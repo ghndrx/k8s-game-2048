@@ -117,7 +117,7 @@ jobs:
         RETRY_COUNT=0
         
         # Get the canonical Knative domain for health check
-        HEALTH_URL="https://game-2048-prod.game-2048-prod.${{ secrets.KNATIVE_DOMAIN }}"
+        HEALTH_URL="https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }}"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
           echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Checking: $HEALTH_URL"
@@ -172,10 +172,10 @@ jobs:
         
         if [ "${{ job.status }}" = "success" ]; then
           echo "- **Status:** ✅ **LIVE IN PRODUCTION**" >> $GITHUB_STEP_SUMMARY
-          echo "- **URL:** https://game-2048-prod.game-2048-prod.${{ secrets.KNATIVE_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🎉 Production is Live!" >> $GITHUB_STEP_SUMMARY
-          echo "- 🎮 [Play the game](https://game-2048-prod.game-2048-prod.${{ secrets.KNATIVE_DOMAIN }})" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎮 [Play the game](https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🧪 [Run smoke tests](https://github.com/${{ github.repository }}/actions/workflows/smoke-test.yml)" >> $GITHUB_STEP_SUMMARY
         else
           echo "- **Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY

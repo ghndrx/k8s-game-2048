@@ -94,7 +94,7 @@ jobs:
         RETRY_COUNT=0
         
         # Get the canonical Knative domain for health check
-        HEALTH_URL="https://game-2048-staging.game-2048-staging.${{ secrets.KNATIVE_DOMAIN }}"
+        HEALTH_URL="https://game-2048-staging.game-2048-staging.${{ secrets.STAGING_DOMAIN }}"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
           echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Checking: $HEALTH_URL"
@@ -133,7 +133,7 @@ jobs:
         
         if [ "${{ job.status }}" = "success" ]; then
           echo "- **Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
-          echo "- **URL:** https://game-2048-staging.game-2048-staging.${{ secrets.KNATIVE_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://game-2048-staging.game-2048-staging.${{ secrets.STAGING_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
         else
           echo "- **Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
         fi
