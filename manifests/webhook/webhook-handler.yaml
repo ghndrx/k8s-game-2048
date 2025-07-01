@@ -108,12 +108,7 @@ spec:
           cp /shared/kubectl /usr/local/bin/ 2>/dev/null || echo "kubectl already available"
           chmod +x /usr/local/bin/kubectl 2>/dev/null || true
           
-          # Set up kubeconfig
-          mkdir -p /root/.kube
-          cp /etc/kubeconfig/config /root/.kube/config
-          chmod 600 /root/.kube/config
-          
-          # Test connectivity
+          # Test connectivity (using in-cluster service account)
           echo "🔍 Testing Kubernetes connectivity..."
           kubectl version --client || echo "⚠️ kubectl client test failed"
           kubectl cluster-info || echo "⚠️ cluster connectivity test failed, but continuing..."
@@ -128,10 +123,6 @@ spec:
           subPath: webhook-handler.py
         - name: manifests
           mountPath: /app/manifests
-        - name: docker-socket
-          mountPath: /var/run/docker.sock
-        - name: kubeconfig
-          mountPath: /etc/kubeconfig
         - name: shared-tools
           mountPath: /shared
         livenessProbe:
@@ -166,14 +157,6 @@ spec:
         hostPath:
           path: /home/administrator/k8s-game-2048/manifests
           type: Directory
-      - name: docker-socket
-        hostPath:
-          path: /var/run/docker.sock
-          type: Socket
-      - name: kubeconfig
-        secret:
-          secretName: webhook-kubeconfig
-          defaultMode: 0600
       - name: shared-tools
         emptyDir: {}
 ---

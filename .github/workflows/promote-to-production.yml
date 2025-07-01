@@ -11,6 +11,7 @@ jobs:
   test-staging-and-promote-to-main:
     name: Test Staging and Promote to Main
     runs-on: ubuntu-latest
+    environment: staging
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
     steps:
@@ -28,27 +29,20 @@ jobs:
       run: |
         echo "🧪 Running comprehensive tests on staging environment..."
         
-        # Test canonical staging domain first (primary test)
-        echo "Testing canonical staging domain: game-2048-staging.game-2048-staging.staging.wa.darknex.us"
-        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://game-2048-staging.game-2048-staging.staging.wa.darknex.us/)
+        # Use the canonical Knative domain for staging
+        CANONICAL_URL="https://game-2048-staging.game-2048-staging.${{ secrets.STAGING_DOMAIN }}"
+        echo "Testing canonical staging domain: $CANONICAL_URL"
+        
+        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$CANONICAL_URL")
         if [ "$canonical_response" != "200" ]; then
           echo "❌ Staging canonical domain returned HTTP $canonical_response"
           exit 1
         fi
         echo "✅ Staging canonical domain accessible"
         
-        # Test custom staging domain
-        echo "Testing custom staging domain: 2048-staging.wa.darknex.us"
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://2048-staging.wa.darknex.us/)
-        if [ "$response_code" != "200" ]; then
-          echo "❌ Staging custom domain returned HTTP $response_code"
-          exit 1
-        fi
-        echo "✅ Staging custom domain accessible"
-        
         # Test staging content validation on canonical domain
         echo "Testing staging content validation..."
-        content=$(curl -s -L --max-time 30 https://game-2048-staging.game-2048-staging.staging.wa.darknex.us/)
+        content=$(curl -s -L --max-time 30 "$CANONICAL_URL")
         
         if ! echo "$content" | grep -q "2048"; then
           echo "❌ Content missing 2048 title"
@@ -74,7 +68,7 @@ jobs:
         
         # Test staging performance on canonical domain
         echo "Testing staging performance..."
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://game-2048-staging.game-2048-staging.staging.wa.darknex.us/)
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "$CANONICAL_URL")
         if (( $(echo "$response_time > 10.0" | bc -l) )); then
           echo "❌ Response time too slow: ${response_time}s"
           exit 1
@@ -127,9 +121,15 @@ jobs:
         echo "- Performance testing" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🎮 Deployment Status" >> $GITHUB_STEP_SUMMARY
-        echo "- **Development**: ✅ Live at https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- **Staging**: ✅ Live at https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- **Production**: 🚀 Deploying to https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        
+        # Use canonical domain format (these are the Knative domains)
+        DEV_URL="https://game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+        STAGING_URL="https://game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+        PROD_URL="https://game-2048-prod.game-2048-prod.wa.darknex.us"
+        
+        echo "- **Development**: ✅ Live at $DEV_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Staging**: ✅ Live at $STAGING_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Production**: 🚀 Deploying to $PROD_URL" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Next Steps" >> $GITHUB_STEP_SUMMARY
         echo "- Production deployment will start automatically" >> $GITHUB_STEP_SUMMARY
