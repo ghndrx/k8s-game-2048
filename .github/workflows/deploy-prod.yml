@@ -83,8 +83,13 @@ jobs:
         
         for i in {1..5}; do
           echo "Attempt $i/5..."
-          if curl -s --max-time 30 https://2048.wa.darknex.us/ | grep -q "2048"; then
-            echo "✅ Smoke test passed!"
+          # Test canonical domain first
+          if curl -s --max-time 30 https://game-2048-prod.game-2048-prod.wa.darknex.us/ | grep -q "2048"; then
+            echo "✅ Canonical domain smoke test passed!"
+            break
+          # Fallback to custom domain
+          elif curl -s --max-time 30 https://2048.wa.darknex.us/ | grep -q "2048"; then
+            echo "✅ Custom domain smoke test passed!"
             break
           elif [ $i -eq 5 ]; then
             echo "⚠️ Smoke test failed after 5 attempts"

@@ -82,27 +82,42 @@ jobs:
           echo "✅ Certificate is valid for $days_until_expiry days"
         fi
 
-    - name: Test Domain Accessibility
+    - name: Test Canonical Domain (Primary Test)
       run: |
-        echo "🌐 Testing domain accessibility for ${{ env.DOMAIN }}"
+        echo "🎯 Testing canonical Knative domain: ${{ env.CANONICAL_DOMAIN }}"
         
-        # Test HTTPS access
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.DOMAIN }}/)
-        echo "HTTP response code: $response_code"
+        # Test HTTPS access to canonical domain
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        echo "Canonical domain HTTP response code: $response_code"
         
         if [ "$response_code" != "200" ]; then
-          echo "❌ Domain ${{ env.DOMAIN }} returned HTTP $response_code"
+          echo "❌ Canonical domain ${{ env.CANONICAL_DOMAIN }} returned HTTP $response_code"
           exit 1
         else
-          echo "✅ Domain ${{ env.DOMAIN }} is accessible"
+          echo "✅ Canonical domain ${{ env.CANONICAL_DOMAIN }} is accessible"
         fi
 
-    - name: Test Content Validation
+    - name: Test Custom Domain Accessibility  
       run: |
-        echo "📄 Testing content validation for ${{ env.DOMAIN }}"
+        echo "🌐 Testing custom domain accessibility for ${{ env.DOMAIN }}"
         
-        # Download the page content
-        content=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/)
+        # Test HTTPS access (allow redirects)
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.DOMAIN }}/)
+        echo "Custom domain HTTP response code: $response_code"
+        
+        if [ "$response_code" != "200" ]; then
+          echo "❌ Custom domain ${{ env.DOMAIN }} returned HTTP $response_code"
+          exit 1
+        else
+          echo "✅ Custom domain ${{ env.DOMAIN }} is accessible"
+        fi
+
+    - name: Test Content Validation (Canonical Domain)
+      run: |
+        echo "📄 Testing content validation on canonical domain: ${{ env.CANONICAL_DOMAIN }}"
+        
+        # Download the page content from canonical domain
+        content=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
         
         # Check if it contains expected 2048 game elements
         if echo "$content" | grep -q "2048"; then
@@ -123,6 +138,7 @@ jobs:
           echo "✅ Page shows correct environment: ${{ env.ENV_NAME }}"
         else
           echo "⚠️  Environment indicator not found or incorrect"
+          # Don't fail on this, just warn
         fi
         
         # Check if CSS and JS files are referenced
@@ -137,6 +153,21 @@ jobs:
           echo "✅ JavaScript file is referenced"
         else
           echo "❌ JavaScript file is not referenced"
+          exit 1
+        fi
+
+    - name: Test Content Validation (Custom Domain)
+      run: |
+        echo "📄 Testing content validation on custom domain: ${{ env.DOMAIN }}"
+        
+        # Download the page content from custom domain
+        content=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/)
+        
+        # Basic content check to ensure redirect worked
+        if echo "$content" | grep -q "2048"; then
+          echo "✅ Custom domain serves correct content"
+        else
+          echo "❌ Custom domain does not serve correct content"
           exit 1
         fi
 
@@ -162,23 +193,23 @@ jobs:
           exit 1
         fi
 
-    - name: Test Performance
+    - name: Test Performance (Canonical Domain)
       run: |
-        echo "⚡ Testing performance for ${{ env.DOMAIN }}"
+        echo "⚡ Testing performance for canonical domain: ${{ env.CANONICAL_DOMAIN }}"
         
-        # Measure response time
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.DOMAIN }}/)
-        echo "Response time: ${response_time}s"
+        # Measure response time on canonical domain
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        echo "Canonical domain response time: ${response_time}s"
         
         # Check if response time is reasonable (under 10 seconds)
         if (( $(echo "$response_time < 10.0" | bc -l) )); then
-          echo "✅ Response time is acceptable"
+          echo "✅ Canonical domain response time is acceptable"
         else
-          echo "⚠️  Response time is slow: ${response_time}s"
+          echo "⚠️  Canonical domain response time is slow: ${response_time}s"
         fi
         
         # Check content size
-        content_size=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/ | wc -c)
+        content_size=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/ | wc -c)
         echo "Content size: $content_size bytes"
         
         if [ $content_size -gt 1000 ]; then
@@ -186,6 +217,21 @@ jobs:
         else
           echo "❌ Content size is too small: $content_size bytes"
           exit 1
+        fi
+
+    - name: Test Performance (Custom Domain)
+      run: |
+        echo "⚡ Testing performance for custom domain: ${{ env.DOMAIN }}"
+        
+        # Measure response time including any redirects
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.DOMAIN }}/)
+        echo "Custom domain response time (with redirects): ${response_time}s"
+        
+        # More lenient for custom domain due to potential redirects
+        if (( $(echo "$response_time < 15.0" | bc -l) )); then
+          echo "✅ Custom domain response time is acceptable"
+        else
+          echo "⚠️  Custom domain response time is slow: ${response_time}s"
         fi
 
   test-infrastructure:
