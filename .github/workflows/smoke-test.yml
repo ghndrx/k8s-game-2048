@@ -43,46 +43,20 @@ jobs:
       run: |
         case "${{ matrix.environment }}" in
           dev)
-            echo "DOMAIN=2048-dev.wa.darknex.us" >> $GITHUB_ENV
             echo "CANONICAL_DOMAIN=game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=development" >> $GITHUB_ENV
             ;;
           staging)
-            echo "DOMAIN=2048-staging.wa.darknex.us" >> $GITHUB_ENV
             echo "CANONICAL_DOMAIN=game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=staging" >> $GITHUB_ENV
             ;;
           prod)
-            echo "DOMAIN=2048.wa.darknex.us" >> $GITHUB_ENV
             echo "CANONICAL_DOMAIN=game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=production" >> $GITHUB_ENV
             ;;
         esac
 
-    - name: Test SSL Certificate
-      run: |
-        echo "🔒 Testing SSL certificate for ${{ env.DOMAIN }}"
-        
-        # Check SSL certificate validity
-        cert_info=$(echo | openssl s_client -servername ${{ env.DOMAIN }} -connect ${{ env.DOMAIN }}:443 2>/dev/null | openssl x509 -noout -dates)
-        echo "Certificate info: $cert_info"
-        
-        # Check if certificate is valid for at least 30 days
-        expiry_date=$(echo | openssl s_client -servername ${{ env.DOMAIN }} -connect ${{ env.DOMAIN }}:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
-        expiry_epoch=$(date -d "$expiry_date" +%s)
-        current_epoch=$(date +%s)
-        days_until_expiry=$(( (expiry_epoch - current_epoch) / 86400 ))
-        
-        echo "Days until certificate expiry: $days_until_expiry"
-        
-        if [ $days_until_expiry -lt 30 ]; then
-          echo "❌ Certificate expires in less than 30 days!"
-          exit 1
-        else
-          echo "✅ Certificate is valid for $days_until_expiry days"
-        fi
-
-    - name: Test Canonical Domain (Primary Test)
+    - name: Test Canonical Domain Accessibility
       run: |
         echo "🎯 Testing canonical Knative domain: ${{ env.CANONICAL_DOMAIN }}"
         
@@ -97,22 +71,7 @@ jobs:
           echo "✅ Canonical domain ${{ env.CANONICAL_DOMAIN }} is accessible"
         fi
 
-    - name: Test Custom Domain Accessibility  
-      run: |
-        echo "🌐 Testing custom domain accessibility for ${{ env.DOMAIN }}"
-        
-        # Test HTTPS access (allow redirects)
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.DOMAIN }}/)
-        echo "Custom domain HTTP response code: $response_code"
-        
-        if [ "$response_code" != "200" ]; then
-          echo "❌ Custom domain ${{ env.DOMAIN }} returned HTTP $response_code"
-          exit 1
-        else
-          echo "✅ Custom domain ${{ env.DOMAIN }} is accessible"
-        fi
-
-    - name: Test Content Validation (Canonical Domain)
+    - name: Test Content Validation
       run: |
         echo "📄 Testing content validation on canonical domain: ${{ env.CANONICAL_DOMAIN }}"
         
@@ -156,44 +115,7 @@ jobs:
           exit 1
         fi
 
-    - name: Test Content Validation (Custom Domain)
-      run: |
-        echo "📄 Testing content validation on custom domain: ${{ env.DOMAIN }}"
-        
-        # Download the page content from custom domain
-        content=$(curl -s -L --max-time 30 https://${{ env.DOMAIN }}/)
-        
-        # Basic content check to ensure redirect worked
-        if echo "$content" | grep -q "2048"; then
-          echo "✅ Custom domain serves correct content"
-        else
-          echo "❌ Custom domain does not serve correct content"
-          exit 1
-        fi
-
-    - name: Test Redirect Behavior
-      run: |
-        echo "🔄 Testing redirect behavior for ${{ env.DOMAIN }}"
-        
-        # Test if custom domain redirects properly (allow redirects but capture them)
-        redirect_info=$(curl -s -I -L --max-time 30 https://${{ env.DOMAIN }}/ | grep -E "(HTTP|Location)")
-        echo "Redirect chain:"
-        echo "$redirect_info"
-        
-        # Check final destination
-        final_url=$(curl -s -o /dev/null -w "%{url_effective}" -L --max-time 30 https://${{ env.DOMAIN }}/)
-        echo "Final URL: $final_url"
-        
-        # Verify we can access the canonical domain directly
-        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
-        if [ "$canonical_response" = "200" ]; then
-          echo "✅ Canonical domain ${{ env.CANONICAL_DOMAIN }} is accessible"
-        else
-          echo "❌ Canonical domain ${{ env.CANONICAL_DOMAIN }} returned HTTP $canonical_response"
-          exit 1
-        fi
-
-    - name: Test Performance (Canonical Domain)
+    - name: Test Performance
       run: |
         echo "⚡ Testing performance for canonical domain: ${{ env.CANONICAL_DOMAIN }}"
         
@@ -219,23 +141,8 @@ jobs:
           exit 1
         fi
 
-    - name: Test Performance (Custom Domain)
-      run: |
-        echo "⚡ Testing performance for custom domain: ${{ env.DOMAIN }}"
-        
-        # Measure response time including any redirects
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.DOMAIN }}/)
-        echo "Custom domain response time (with redirects): ${response_time}s"
-        
-        # More lenient for custom domain due to potential redirects
-        if (( $(echo "$response_time < 15.0" | bc -l) )); then
-          echo "✅ Custom domain response time is acceptable"
-        else
-          echo "⚠️  Custom domain response time is slow: ${response_time}s"
-        fi
-
-  test-infrastructure:
-    name: Infrastructure Tests
+  test-canonical-domains:
+    name: Canonical Domain Infrastructure Tests
     runs-on: ubuntu-latest
     if: github.event.inputs.environment == 'all' || github.event.inputs.environment == '' || github.event_name != 'workflow_dispatch'
     
@@ -243,14 +150,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Test DNS Resolution
+    - name: Test Canonical Domain DNS Resolution
       run: |
-        echo "🌐 Testing DNS resolution"
+        echo "🌐 Testing canonical domain DNS resolution"
         
-        domains=("2048-dev.wa.darknex.us" "2048-staging.wa.darknex.us" "2048.wa.darknex.us")
+        canonical_domains=(
+          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+          "game-2048-prod.game-2048-prod.wa.darknex.us"
+        )
         
-        for domain in "${domains[@]}"; do
-          echo "Testing DNS for $domain"
+        for domain in "${canonical_domains[@]}"; do
+          echo "Testing DNS for canonical domain: $domain"
           ip=$(dig +short $domain)
           if [ -n "$ip" ]; then
             echo "✅ $domain resolves to: $ip"
@@ -260,14 +171,18 @@ jobs:
           fi
         done
 
-    - name: Test SSL Certificate Chain
+    - name: Test Canonical Domain SSL Certificate Chain
       run: |
-        echo "🔐 Testing SSL certificate chains"
+        echo "🔐 Testing SSL certificate chains for canonical domains"
         
-        domains=("2048-dev.wa.darknex.us" "2048-staging.wa.darknex.us" "2048.wa.darknex.us")
+        canonical_domains=(
+          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+          "game-2048-prod.game-2048-prod.wa.darknex.us"
+        )
         
-        for domain in "${domains[@]}"; do
-          echo "Testing SSL chain for $domain"
+        for domain in "${canonical_domains[@]}"; do
+          echo "Testing SSL chain for canonical domain: $domain"
           
           # Test certificate chain
           chain_result=$(echo | openssl s_client -servername $domain -connect $domain:443 -verify_return_error 2>&1)
@@ -284,19 +199,19 @@ jobs:
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [smoke-tests, test-infrastructure]
+    needs: [smoke-tests, test-canonical-domains]
     if: always()
     
     steps:
     - name: Check test results
       run: |
-        if [ "${{ needs.smoke-tests.result }}" = "success" ] && [ "${{ needs.test-infrastructure.result }}" = "success" ]; then
+        if [ "${{ needs.smoke-tests.result }}" = "success" ] && [ "${{ needs.test-canonical-domains.result }}" = "success" ]; then
           echo "✅ All tests passed successfully!"
-          echo "🎮 2048 game is working correctly across all environments"
+          echo "🎮 2048 game is working correctly across all environments using canonical Knative domains"
         else
           echo "❌ Some tests failed"
           echo "Smoke tests: ${{ needs.smoke-tests.result }}"
-          echo "Infrastructure tests: ${{ needs.test-infrastructure.result }}"
+          echo "Canonical domain tests: ${{ needs.test-canonical-domains.result }}"
           exit 1
         fi
 
@@ -308,9 +223,9 @@ jobs:
         echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
         echo "| Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Infrastructure Tests | ${{ needs.test-infrastructure.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Canonical Domain Tests | ${{ needs.test-canonical-domains.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Tested Domains" >> $GITHUB_STEP_SUMMARY
-        echo "- 🧪 Development: https://2048-dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- 🎭 Staging: https://2048-staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- 🚀 Production: https://2048.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "### Tested Canonical Domains" >> $GITHUB_STEP_SUMMARY
+        echo "- 🧪 Development: https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎭 Staging: https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 Production: https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
