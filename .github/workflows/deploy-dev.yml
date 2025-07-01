@@ -1,15 +1,16 @@
 name: Deploy to Development
 
 on:
-  push:
-    branches: [ main, master, develop ]
-    paths:
-      - 'src/**'
-      - 'Dockerfile'
-      - 'nginx.conf'
-      - 'package.json'
-      - 'manifests/dev/**'
+  workflow_run:
+    workflows: ["Build and Push Container Image"]
+    types:
+      - completed
+    branches: [ develop ]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest build)'
+        required: false
 
 env:
   REGISTRY: ghcr.io
@@ -19,41 +20,23 @@ jobs:
   deploy-dev:
     runs-on: ubuntu-latest
     environment: development
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GH_TOKEN }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-
     - name: Set image tag for deployment
       run: |
-        IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.image_tag }}" ]; then
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+        else
+          # Use the commit-based tag that was just built
+          IMAGE_TAG="develop-$(echo "${{ github.sha }}" | cut -c1-7)"
+        fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "🏷️ Using image tag: $IMAGE_TAG"
+        echo "📦 Full image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
 
     - name: Deploy to development via webhook
       run: |

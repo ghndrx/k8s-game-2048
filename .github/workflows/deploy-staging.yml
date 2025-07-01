@@ -33,8 +33,8 @@ jobs:
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
         else
-          # For auto-promotion, use the latest successful build
-          IMAGE_TAG="main-$(echo "${{ github.sha }}" | cut -c1-7)"
+          # For staging deployment, use the staging branch commit tag
+          IMAGE_TAG="staging-$(echo "${{ github.sha }}" | cut -c1-7)"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "Deploying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
