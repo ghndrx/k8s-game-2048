@@ -116,7 +116,7 @@ jobs:
         MAX_RETRIES=10
         RETRY_COUNT=0
         
-        # Get the canonical Knative domain for health check
+        # Use the canonical Knative domain for health check
         HEALTH_URL="https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }}"
         
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do

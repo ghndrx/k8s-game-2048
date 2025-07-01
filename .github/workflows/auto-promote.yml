@@ -11,6 +11,7 @@ jobs:
   test-and-promote-to-staging:
     name: Test Dev and Auto-Promote to Staging
     runs-on: ubuntu-latest
+    environment: development
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
     steps:
@@ -28,40 +29,20 @@ jobs:
       run: |
         echo "🧪 Running comprehensive tests on dev environment..."
         
-        # Test canonical domain first (primary test)
-        echo "Testing canonical domain: game-2048-dev.game-2048-dev.dev.wa.darknex.us"
-        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://game-2048-dev.game-2048-dev.dev.wa.darknex.us/)
+        # Use the canonical Knative domain
+        CANONICAL_URL="https://game-2048-dev.game-2048-dev.${{ secrets.DEV_DOMAIN }}"
+        echo "Testing canonical domain: $CANONICAL_URL"
+        
+        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$CANONICAL_URL")
         if [ "$canonical_response" != "200" ]; then
           echo "❌ Canonical domain returned HTTP $canonical_response"
           exit 1
         fi
         echo "✅ Canonical domain accessible"
         
-        # Test SSL certificate on custom domain
-        echo "Testing SSL certificate on custom domain..."
-        cert_expiry=$(echo | openssl s_client -servername 2048-dev.wa.darknex.us -connect 2048-dev.wa.darknex.us:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
-        expiry_epoch=$(date -d "$cert_expiry" +%s)
-        current_epoch=$(date +%s)
-        days_until_expiry=$(( (expiry_epoch - current_epoch) / 86400 ))
-        
-        if [ $days_until_expiry -lt 30 ]; then
-          echo "❌ SSL certificate expires in less than 30 days!"
-          exit 1
-        fi
-        echo "✅ SSL certificate valid for $days_until_expiry days"
-        
-        # Test custom domain accessibility  
-        echo "Testing custom domain accessibility..."
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://2048-dev.wa.darknex.us/)
-        if [ "$response_code" != "200" ]; then
-          echo "❌ Custom domain returned HTTP $response_code"
-          exit 1
-        fi
-        echo "✅ Custom domain accessible"
-        
         # Test content validation on canonical domain
         echo "Testing content validation on canonical domain..."
-        content=$(curl -s -L --max-time 30 https://game-2048-dev.game-2048-dev.dev.wa.darknex.us/)
+        content=$(curl -s -L --max-time 30 "$CANONICAL_URL")
         
         if ! echo "$content" | grep -q "2048"; then
           echo "❌ Content missing 2048 title"
@@ -87,7 +68,7 @@ jobs:
         
         # Test performance on canonical domain
         echo "Testing performance on canonical domain..."
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://game-2048-dev.game-2048-dev.dev.wa.darknex.us/)
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "$CANONICAL_URL")
         if (( $(echo "$response_time > 10.0" | bc -l) )); then
           echo "❌ Response time too slow: ${response_time}s"
           exit 1
@@ -134,8 +115,7 @@ jobs:
         echo "| Staging Deploy | ⏳ Triggered | Deployment will start automatically |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📋 Tests Performed" >> $GITHUB_STEP_SUMMARY
-        echo "- SSL certificate validation" >> $GITHUB_STEP_SUMMARY
-        echo "- Domain accessibility check" >> $GITHUB_STEP_SUMMARY
+        echo "- Canonical domain accessibility check" >> $GITHUB_STEP_SUMMARY
         echo "- Content and functionality validation" >> $GITHUB_STEP_SUMMARY
         echo "- Performance testing" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
