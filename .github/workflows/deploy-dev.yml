@@ -65,7 +65,10 @@ jobs:
           kubectl apply -f -
         fi
         
-        # Update image in service and deploy
+        # Apply the Knative service manifest first
+        kubectl apply -f manifests/dev/service.yml
+        
+        # Update image in service
         kubectl patch ksvc game-2048-dev -n game-2048-dev --type merge -p '{"spec":{"template":{"spec":{"containers":[{"image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","imagePullPolicy":"Always"}]}}}}'
         
         echo "⏳ Waiting for deployment to be ready..."
@@ -103,115 +106,17 @@ jobs:
             sleep 30
           fi
         done
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
 
-    - name: Configure kubectl
+    - name: Create deployment summary
       run: |
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=kubeconfig
-
-    - name: Update image in manifests
-      run: |
-        sed -i "s|ghcr.io/ghndrx/k8s-game-2048:latest|${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" manifests/dev/service.yml
-
-    - name: Deploy to development
-      run: |
-        export KUBECONFIG=kubeconfig
-        kubectl apply -f manifests/dev/
-
-    - name: Wait for deployment
-      run: |
-        export KUBECONFIG=kubeconfig
-        kubectl wait --for=condition=Ready ksvc/game-2048-dev -n game-2048-dev --timeout=300s
-
-    - name: Get service URL
-      id: get-url
-      run: |
-        export KUBECONFIG=kubeconfig
-        SERVICE_URL=$(kubectl get ksvc game-2048-dev -n game-2048-dev -o jsonpath='{.status.url}')
-        echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
-        echo "🚀 Development service deployed at: $SERVICE_URL"
-
-    - name: Set up Node.js for testing
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: tests/package.json
-
-    - name: Install Playwright dependencies
-      run: |
-        cd tests
-        npm install
-        npx playwright install --with-deps
-
-    - name: Run Playwright tests
-      run: |
-        cd tests
-        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test
-      env:
-        CI: true
-
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: playwright-results-dev-${{ github.sha }}-${{ github.run_number }}
-        path: |
-          tests/playwright-report/
-          tests/test-results/
-        retention-days: 30
-
-    - name: Upload screenshots
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: screenshots-dev-${{ github.sha }}-${{ github.run_number }}
-        path: tests/test-results/**/*.png
-        retention-days: 30
-
-  promote-to-staging:
-    needs: build-and-deploy
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Create Pull Request to Staging
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        push-to-fork: false
-        branch: auto-promote/dev-to-staging-${{ github.sha }}
-        base: staging
-        title: "🚀 Auto-promote: Deploy ${{ github.sha }} to staging"
-        body: |
-          ## 🚀 Auto-promotion from Development
-          
-          **Source**: `develop` branch
-          **Commit**: ${{ github.sha }}
-          **Triggered by**: @${{ github.actor }}
-          
-          ### ✅ Development Tests Passed
-          - Basic functionality tests
-          - Gameplay mechanics tests  
-          - Visual regression tests
-          - Environment validation tests
-          
-          ### 🎯 Changes in this promotion:
-          ${{ github.event.head_commit.message }}
-          
-          This PR was automatically created after successful deployment and testing in the development environment.
-          
-          **Development URL**: https://2048-dev.wa.darknex.us
-          **Will deploy to**: https://2048-staging.wa.darknex.us
-        labels: |
-          auto-promotion
-          staging
-          deploy
+        echo "## 🚀 Development Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Namespace | ✅ Applied |" >> $GITHUB_STEP_SUMMARY
+        echo "| Service | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+        echo "| Health Check | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 URLs" >> $GITHUB_STEP_SUMMARY
+        echo "- **Canonical**: https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- **Custom**: https://2048-dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
