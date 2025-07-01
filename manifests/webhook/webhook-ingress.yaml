@@ -27,10 +27,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - webhook.yourdomain.com  # Replace with your actual domain
+    - webhook.wa.darknex.us
     secretName: webhook-tls
   rules:
-  - host: webhook.yourdomain.com  # Replace with your actual domain
+  - host: webhook.wa.darknex.us
     http:
       paths:
       - path: /

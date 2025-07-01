@@ -30,7 +30,7 @@ metadata:
   labels:
     app: webhook-handler
 spec:
-  replicas: 2  # For high availability
+  replicas: 1  # Start with 1 for testing
   selector:
     matchLabels:
       app: webhook-handler
@@ -40,6 +40,37 @@ spec:
         app: webhook-handler
     spec:
       serviceAccountName: webhook-handler
+      initContainers:
+      - name: setup
+        image: python:3.11-slim
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🚀 Setting up webhook handler dependencies..."
+          
+          # Update and install basic tools
+          apt-get update
+          apt-get install -y curl wget
+          
+          # Install kubectl
+          echo "📦 Installing kubectl..."
+          curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          cp kubectl /shared/kubectl
+          
+          # Install Python dependencies
+          echo "📦 Installing Python dependencies..."
+          pip install flask requests
+          
+          # Copy requirements to shared volume
+          pip freeze > /shared/requirements.txt
+          
+          echo "✅ Setup completed!"
+        volumeMounts:
+        - name: shared-tools
+          mountPath: /shared
       containers:
       - name: webhook-handler
         image: python:3.11-slim
@@ -57,16 +88,40 @@ spec:
             configMapKeyRef:
               name: webhook-handler-config
               key: MANIFESTS_PATH
+        - name: PATH
+          value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/shared"
         command:
         - /bin/bash
         - -c
         - |
-          apt-get update && apt-get install -y curl
-          curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && mv kubectl /usr/local/bin/
-          curl -fsSL https://get.docker.com | sh
-          pip install flask
-          python /app/webhook-handler.py
+          set -e
+          echo "🎯 Starting webhook handler..."
+          
+          # Install Python dependencies from init container
+          if [ -f /shared/requirements.txt ]; then
+            pip install -r /shared/requirements.txt
+          else
+            pip install flask requests
+          fi
+          
+          # Make kubectl available
+          cp /shared/kubectl /usr/local/bin/ 2>/dev/null || echo "kubectl already available"
+          chmod +x /usr/local/bin/kubectl 2>/dev/null || true
+          
+          # Set up kubeconfig
+          mkdir -p /root/.kube
+          cp /etc/kubeconfig/config /root/.kube/config
+          chmod 600 /root/.kube/config
+          
+          # Test connectivity
+          echo "🔍 Testing Kubernetes connectivity..."
+          kubectl version --client || echo "⚠️ kubectl client test failed"
+          kubectl cluster-info || echo "⚠️ cluster connectivity test failed, but continuing..."
+          
+          # Start the webhook handler
+          echo "🚀 Starting Flask application..."
+          cd /app
+          exec python webhook-handler.py
         volumeMounts:
         - name: webhook-handler-script
           mountPath: /app/webhook-handler.py
@@ -76,20 +131,25 @@ spec:
         - name: docker-socket
           mountPath: /var/run/docker.sock
         - name: kubeconfig
-          mountPath: /root/.kube/config
-          subPath: config
+          mountPath: /etc/kubeconfig
+        - name: shared-tools
+          mountPath: /shared
         livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
           httpGet:
             path: /health
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
             memory: "256Mi"
@@ -104,16 +164,18 @@ spec:
           defaultMode: 0755
       - name: manifests
         hostPath:
-          path: /home/administrator/k8s-game-2048/manifests  # Update this path
+          path: /home/administrator/k8s-game-2048/manifests
           type: Directory
       - name: docker-socket
         hostPath:
           path: /var/run/docker.sock
           type: Socket
       - name: kubeconfig
-        hostPath:
-          path: /etc/rancher/k3s/k3s.yaml  # Default k3s kubeconfig location
-          type: File
+        secret:
+          secretName: webhook-kubeconfig
+          defaultMode: 0600
+      - name: shared-tools
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

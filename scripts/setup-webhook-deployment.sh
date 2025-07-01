@@ -4,15 +4,30 @@ set -e
 # Webhook-based Deployment Setup Script for k8s-game-2048
 echo "🚀 Setting up webhook-based deployment for k8s-game-2048..."
 
-# Configuration
+# Load configuration from .env file
+if [ -f ".env" ]; then
+  echo "📋 Loading configuration from .env file..."
+  export $(grep -v '^#' .env | xargs)
+else
+  echo "⚠️ No .env file found, using defaults"
+fi
+
+# Configuration with fallbacks
 WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
 MANIFESTS_PATH="${MANIFESTS_PATH:-/home/administrator/k8s-game-2048/manifests}"
-WEBHOOK_DOMAIN="${WEBHOOK_DOMAIN:-webhook.$(hostname -f)}"
+WEBHOOK_DOMAIN="${WEBHOOK_DOMAIN:-webhook.wa.darknex.us}"
+KNATIVE_DOMAIN="${KNATIVE_DOMAIN:-wa.darknex.us}"
+KUBECONFIG_PATH="${KUBECONFIG_PATH:-/etc/rancher/k3s/k3s.yaml}"
+DEPLOY_INGRESS="${DEPLOY_INGRESS:-true}"
+WEBHOOK_REPLICAS="${WEBHOOK_REPLICAS:-1}"
 
 echo "📋 Configuration:"
 echo "  Webhook Secret: ${WEBHOOK_SECRET:0:8}..."
 echo "  Manifests Path: $MANIFESTS_PATH"
 echo "  Webhook Domain: $WEBHOOK_DOMAIN"
+echo "  Knative Domain: $KNATIVE_DOMAIN"
+echo "  Deploy Ingress: $DEPLOY_INGRESS"
+echo "  Replicas: $WEBHOOK_REPLICAS"
 
 # Step 1: Create webhook system namespace
 echo ""
@@ -25,6 +40,19 @@ kubectl create secret generic webhook-secret \
   --from-literal=webhook-secret="$WEBHOOK_SECRET" \
   -n webhook-system \
   --dry-run=client -o yaml | kubectl apply -f -
+
+# Step 2.5: Create kubeconfig secret for webhook handler
+echo "🔑 Creating kubeconfig secret..."
+if [ -f "$KUBECONFIG_PATH" ]; then
+  kubectl create secret generic webhook-kubeconfig \
+    --from-file=config="$KUBECONFIG_PATH" \
+    -n webhook-system \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "⚠️ Kubeconfig not found at $KUBECONFIG_PATH"
+  echo "Please create the webhook-kubeconfig secret manually:"
+  echo "kubectl create secret generic webhook-kubeconfig --from-file=config=~/.kube/config -n webhook-system"
+fi
 
 # Step 3: Update webhook handler manifests with correct paths
 echo "🔧 Updating webhook handler manifests..."
@@ -89,7 +117,7 @@ echo "   - WEBHOOK_SECRET: $WEBHOOK_SECRET"
 echo "   - DEV_WEBHOOK_URL: https://$WEBHOOK_DOMAIN/webhook/deploy"
 echo "   - STAGING_WEBHOOK_URL: https://$WEBHOOK_DOMAIN/webhook/deploy"
 echo "   - PROD_WEBHOOK_URL: https://$WEBHOOK_DOMAIN/webhook/deploy"
-echo "   - KNATIVE_DOMAIN: your-knative-domain.com"
+echo "   - KNATIVE_DOMAIN: $KNATIVE_DOMAIN"
 echo ""
 echo "2. Expose webhook handler externally:"
 if [ "$DEPLOY_INGRESS" != "true" ]; then
@@ -121,5 +149,5 @@ echo "WEBHOOK_SECRET  | $WEBHOOK_SECRET"
 echo "DEV_WEBHOOK_URL | https://$WEBHOOK_DOMAIN/webhook/deploy"
 echo "STAGING_WEBHOOK_URL | https://$WEBHOOK_DOMAIN/webhook/deploy"
 echo "PROD_WEBHOOK_URL | https://$WEBHOOK_DOMAIN/webhook/deploy"
-echo "KNATIVE_DOMAIN  | your-knative-domain.com"
+echo "KNATIVE_DOMAIN  | $KNATIVE_DOMAIN"
 echo "===============================|"
