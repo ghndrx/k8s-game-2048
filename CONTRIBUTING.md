@@ -29,15 +29,17 @@ Thank you for considering contributing to this project! This guide will help you
 
 We use a GitFlow-inspired workflow:
 
-- **`main`** - Production-ready code, deployed to staging automatically
+- **`master`** - Production-ready code, deployed to production automatically
+- **`staging`** - Staging branch, deployed to staging environment automatically
 - **`develop`** - Development branch, deployed to dev environment automatically  
 - **`feature/*`** - Feature branches, create PR to develop
-- **`hotfix/*`** - Hotfix branches, create PR to main
+- **`hotfix/*`** - Hotfix branches, create PR to master
 - **`release/*`** - Release branches for production deployment
 
 ### Branch Protection Rules
 
-- **`main`**: Requires PR review, all checks must pass
+- **`master`**: Requires PR review, all checks must pass
+- **`staging`**: Requires PR review, all checks must pass
 - **`develop`**: Requires PR review, all checks must pass
 
 ## Deployment Environments
@@ -45,8 +47,8 @@ We use a GitFlow-inspired workflow:
 | Environment | Branch | Domain | Auto-Deploy |
 |-------------|--------|---------|------------|
 | Development | `develop` | `2048-dev.wa.darknex.us` | ✅ |
-| Staging | `main` | `2048-staging.wa.darknex.us` | ✅ |
-| Production | `tags` | `2048.wa.darknex.us` | Manual |
+| Staging | `staging` | `2048-staging.wa.darknex.us` | ✅ |
+| Production | `master` | `2048.wa.darknex.us` | ✅ |
 
 ## Making Changes
 
@@ -72,14 +74,14 @@ We use a GitFlow-inspired workflow:
 
 ### For Bug Fixes
 
-1. Create a hotfix branch from `main`:
+1. Create a hotfix branch from `master`:
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout master
+   git pull origin master
    git checkout -b hotfix/fix-description
    ```
 
-2. Make your changes and create PR to `main`
+2. Make your changes and create PR to `master`
 
 ## Commit Convention
 
@@ -133,16 +135,16 @@ curl -f https://2048-dev.wa.darknex.us/
 
 ## Release Process
 
-1. Create a release branch from `main`:
+1. Create a release branch from `master`:
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout master
+   git pull origin master
    git checkout -b release/v1.1.0
    ```
 
 2. Update version in `package.json`
 
-3. Create PR to `main`
+3. Create PR to `master`
 
 4. After merge, create a GitHub release with tag
 
