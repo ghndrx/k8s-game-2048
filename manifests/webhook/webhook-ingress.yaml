@@ -25,6 +25,7 @@ metadata:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Adjust to your cert issuer
 spec:
+  ingressClassName: nginx
   tls:
   - hosts:
     - webhook.wa.darknex.us
