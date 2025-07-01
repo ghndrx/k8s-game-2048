@@ -59,7 +59,10 @@ jobs:
           kubectl apply -f -
         fi
         
-        # Update image in service and deploy
+        # Apply the Knative service manifest first
+        kubectl apply -f manifests/staging/service.yml
+        
+        # Update image in service 
         kubectl patch ksvc game-2048-staging -n game-2048-staging --type merge -p '{"spec":{"template":{"spec":{"containers":[{"image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","imagePullPolicy":"Always"}]}}}}'
         
         echo "⏳ Waiting for deployment to be ready..."
