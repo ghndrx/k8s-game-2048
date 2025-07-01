@@ -43,15 +43,15 @@ jobs:
       run: |
         case "${{ matrix.environment }}" in
           dev)
-            echo "CANONICAL_DOMAIN=game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=development" >> $GITHUB_ENV
             ;;
           staging)
-            echo "CANONICAL_DOMAIN=game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=staging" >> $GITHUB_ENV
             ;;
           prod)
-            echo "CANONICAL_DOMAIN=game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
             echo "ENV_NAME=production" >> $GITHUB_ENV
             ;;
         esac
@@ -61,7 +61,7 @@ jobs:
         echo "🎯 Testing canonical Knative domain: ${{ env.CANONICAL_DOMAIN }}"
         
         # Test HTTPS access to canonical domain
-        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "${{ env.CANONICAL_DOMAIN }}")
         echo "Canonical domain HTTP response code: $response_code"
         
         if [ "$response_code" != "200" ]; then
@@ -76,7 +76,7 @@ jobs:
         echo "📄 Testing content validation on canonical domain: ${{ env.CANONICAL_DOMAIN }}"
         
         # Download the page content from canonical domain
-        content=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        content=$(curl -s -L --max-time 30 "${{ env.CANONICAL_DOMAIN }}")
         
         # Check if it contains expected 2048 game elements
         if echo "$content" | grep -q "2048"; then
@@ -120,7 +120,7 @@ jobs:
         echo "⚡ Testing performance for canonical domain: ${{ env.CANONICAL_DOMAIN }}"
         
         # Measure response time on canonical domain
-        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "${{ env.CANONICAL_DOMAIN }}")
         echo "Canonical domain response time: ${response_time}s"
         
         # Check if response time is reasonable (under 10 seconds)
@@ -131,7 +131,7 @@ jobs:
         fi
         
         # Check content size
-        content_size=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/ | wc -c)
+        content_size=$(curl -s -L --max-time 30 "${{ env.CANONICAL_DOMAIN }}" | wc -c)
         echo "Content size: $content_size bytes"
         
         if [ $content_size -gt 1000 ]; then
@@ -154,6 +154,7 @@ jobs:
       run: |
         echo "🌐 Testing canonical domain DNS resolution"
         
+        # Canonical domains (Knative domains only)
         canonical_domains=(
           "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
           "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
@@ -175,6 +176,7 @@ jobs:
       run: |
         echo "🔐 Testing SSL certificate chains for canonical domains"
         
+        # Canonical domains (Knative domains only)
         canonical_domains=(
           "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
           "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
@@ -226,6 +228,12 @@ jobs:
         echo "| Canonical Domain Tests | ${{ needs.test-canonical-domains.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Tested Canonical Domains" >> $GITHUB_STEP_SUMMARY
-        echo "- 🧪 Development: https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- 🎭 Staging: https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
-        echo "- 🚀 Production: https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        
+        # Use canonical domain format
+        DEV_URL="https://game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+        STAGING_URL="https://game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+        PROD_URL="https://game-2048-prod.game-2048-prod.wa.darknex.us"
+        
+        echo "- 🧪 Development: $DEV_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎭 Staging: $STAGING_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 Production: $PROD_URL" >> $GITHUB_STEP_SUMMARY

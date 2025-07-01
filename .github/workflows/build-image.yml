@@ -2,9 +2,9 @@ name: Build and Push Container Image
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop, staging ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop, staging ]
 
 env:
   REGISTRY: ghcr.io
@@ -26,7 +26,7 @@ jobs:
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ secrets.GH_TOKEN }}
 
     - name: Extract metadata
       id: meta

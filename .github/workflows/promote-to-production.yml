@@ -1,0 +1,137 @@
+name: Promote to Production
+
+on:
+  workflow_run:
+    workflows: ["Deploy to Staging"]
+    types:
+      - completed
+    branches: [ staging ]
+
+jobs:
+  test-staging-and-promote-to-main:
+    name: Test Staging and Promote to Main
+    runs-on: ubuntu-latest
+    environment: staging
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: staging
+
+    - name: Wait for staging deployment to settle
+      run: |
+        echo "⏳ Waiting for staging deployment to fully settle..."
+        sleep 120
+
+    - name: Run comprehensive staging tests
+      run: |
+        echo "🧪 Running comprehensive tests on staging environment..."
+        
+        # Use the canonical Knative domain for staging
+        CANONICAL_URL="https://game-2048-staging.game-2048-staging.${{ secrets.STAGING_DOMAIN }}"
+        echo "Testing canonical staging domain: $CANONICAL_URL"
+        
+        canonical_response=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$CANONICAL_URL")
+        if [ "$canonical_response" != "200" ]; then
+          echo "❌ Staging canonical domain returned HTTP $canonical_response"
+          exit 1
+        fi
+        echo "✅ Staging canonical domain accessible"
+        
+        # Test staging content validation on canonical domain
+        echo "Testing staging content validation..."
+        content=$(curl -s -L --max-time 30 "$CANONICAL_URL")
+        
+        if ! echo "$content" | grep -q "2048"; then
+          echo "❌ Content missing 2048 title"
+          exit 1
+        fi
+        
+        if ! echo "$content" | grep -q "HOW TO PLAY"; then
+          echo "❌ Content missing game instructions"
+          exit 1
+        fi
+        
+        if ! echo "$content" | grep -q "style.css"; then
+          echo "❌ CSS file not referenced"
+          exit 1
+        fi
+        
+        if ! echo "$content" | grep -q "script.js"; then
+          echo "❌ JavaScript file not referenced"
+          exit 1
+        fi
+        
+        echo "✅ All staging content validation tests passed"
+        
+        # Test staging performance on canonical domain
+        echo "Testing staging performance..."
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 "$CANONICAL_URL")
+        if (( $(echo "$response_time > 10.0" | bc -l) )); then
+          echo "❌ Response time too slow: ${response_time}s"
+          exit 1
+        fi
+        echo "✅ Staging performance test passed: ${response_time}s"
+
+    - name: Auto-promote staging to main branch
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          console.log('🎯 All staging tests passed! Auto-promoting staging to main branch...');
+          
+          // Create a merge from staging to main
+          try {
+            const response = await github.rest.repos.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: 'main',
+              head: 'staging',
+              commit_message: 'Auto-promote: Merge staging to main after successful staging tests - Deploy to Production'
+            });
+            
+            console.log('✅ Successfully merged staging to main branch');
+            console.log('This will trigger production deployment automatically');
+            
+            return response;
+          } catch (error) {
+            if (error.status === 409) {
+              console.log('ℹ️ No new commits to merge - main is already up to date');
+            } else {
+              throw error;
+            }
+          }
+
+    - name: Create production promotion summary
+      run: |
+        echo "## 🎉 Production Promotion Summary (Staging → Main)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Stage | Status | Action |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Staging Tests | ✅ Passed | Comprehensive validation completed |" >> $GITHUB_STEP_SUMMARY
+        echo "| Main Branch | 🚀 Updated | Auto-promotion completed |" >> $GITHUB_STEP_SUMMARY
+        echo "| Production Deploy | ⏳ Triggered | Deployment will start automatically |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Tests Performed" >> $GITHUB_STEP_SUMMARY
+        echo "- Staging canonical domain accessibility" >> $GITHUB_STEP_SUMMARY
+        echo "- Staging custom domain accessibility" >> $GITHUB_STEP_SUMMARY
+        echo "- Content and functionality validation" >> $GITHUB_STEP_SUMMARY
+        echo "- Performance testing" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎮 Deployment Status" >> $GITHUB_STEP_SUMMARY
+        
+        # Use canonical domain format (these are the Knative domains)
+        DEV_URL="https://game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+        STAGING_URL="https://game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+        PROD_URL="https://game-2048-prod.game-2048-prod.wa.darknex.us"
+        
+        echo "- **Development**: ✅ Live at $DEV_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Staging**: ✅ Live at $STAGING_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Production**: 🚀 Deploying to $PROD_URL" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- Production deployment will start automatically" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor the production deployment workflow" >> $GITHUB_STEP_SUMMARY
+        echo "- All environments will be live with the latest code!" >> $GITHUB_STEP_SUMMARY

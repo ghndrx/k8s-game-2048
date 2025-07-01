@@ -1,0 +1,215 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-system
+  labels:
+    name: webhook-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-secret
+  namespace: webhook-system
+type: Opaque
+stringData:
+  webhook-secret: "CHANGE_ME_IN_PRODUCTION"  # Replace with your actual webhook secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-handler-config
+  namespace: webhook-system
+data:
+  MANIFESTS_PATH: "/app/manifests"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+  labels:
+    app: webhook-handler
+spec:
+  replicas: 1  # Start with 1 for testing
+  selector:
+    matchLabels:
+      app: webhook-handler
+  template:
+    metadata:
+      labels:
+        app: webhook-handler
+    spec:
+      serviceAccountName: webhook-handler
+      initContainers:
+      - name: setup
+        image: python:3.11-slim
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🚀 Setting up webhook handler dependencies..."
+          
+          # Update and install basic tools
+          apt-get update
+          apt-get install -y curl wget
+          
+          # Install kubectl
+          echo "📦 Installing kubectl..."
+          curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          cp kubectl /shared/kubectl
+          
+          # Install Python dependencies
+          echo "📦 Installing Python dependencies..."
+          pip install flask requests
+          
+          # Copy requirements to shared volume
+          pip freeze > /shared/requirements.txt
+          
+          echo "✅ Setup completed!"
+        volumeMounts:
+        - name: shared-tools
+          mountPath: /shared
+      containers:
+      - name: webhook-handler
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secret
+              key: webhook-secret
+        - name: MANIFESTS_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: webhook-handler-config
+              key: MANIFESTS_PATH
+        - name: PATH
+          value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/shared"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🎯 Starting webhook handler..."
+          
+          # Install Python dependencies from init container
+          if [ -f /shared/requirements.txt ]; then
+            pip install -r /shared/requirements.txt
+          else
+            pip install flask requests
+          fi
+          
+          # Make kubectl available
+          cp /shared/kubectl /usr/local/bin/ 2>/dev/null || echo "kubectl already available"
+          chmod +x /usr/local/bin/kubectl 2>/dev/null || true
+          
+          # Test connectivity (using in-cluster service account)
+          echo "🔍 Testing Kubernetes connectivity..."
+          kubectl version --client || echo "⚠️ kubectl client test failed"
+          kubectl cluster-info || echo "⚠️ cluster connectivity test failed, but continuing..."
+          
+          # Start the webhook handler
+          echo "🚀 Starting Flask application..."
+          cd /app
+          exec python webhook-handler.py
+        volumeMounts:
+        - name: webhook-handler-script
+          mountPath: /app/webhook-handler.py
+          subPath: webhook-handler.py
+        - name: manifests
+          mountPath: /app/manifests
+        - name: shared-tools
+          mountPath: /shared
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: webhook-handler-script
+        configMap:
+          name: webhook-handler-script
+          defaultMode: 0755
+      - name: manifests
+        hostPath:
+          path: /home/administrator/k8s-game-2048/manifests
+          type: Directory
+      - name: shared-tools
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+  labels:
+    app: webhook-handler
+spec:
+  selector:
+    app: webhook-handler
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook-handler
+  namespace: webhook-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-handler
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "secrets", "configmaps", "services"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["serving.knative.dev"]
+  resources: ["services", "revisions"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events", "pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook-handler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: webhook-handler
+subjects:
+- kind: ServiceAccount
+  name: webhook-handler
+  namespace: webhook-system

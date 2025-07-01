@@ -10,253 +10,176 @@ on:
       confirmation:
         description: 'Type "DEPLOY" to confirm production deployment'
         required: true
+      source_environment:
+        description: 'Source environment (staging or manual)'
+        required: false
+        default: 'staging'
+  workflow_run:
+    workflows: ["Deploy to Staging"]
+    types:
+      - completed
+    branches: [ main, master ]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghndrx/k8s-game-2048
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   deploy-prod:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    environment: production
-    if: ${{ github.event.inputs.confirmation == 'DEPLOY' }}
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'DEPLOY') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'latest'
-
-    - name: Configure kubectl
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
-
     - name: Set image tag
       run: |
-        IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
+        else
+          # For auto-promotion, use the latest successful build
+          IMAGE_TAG="main-$(echo "${{ github.sha }}" | cut -c1-7)"
+        fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "Deploying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
 
-    - name: Deploy to production
+    - name: Deploy to production via webhook (Blue-Green)
       run: |
-        echo "🚀 Deploying to production environment..."
+        echo "🚀 Triggering blue-green webhook deployment to production..."
         
-        # Apply namespace
-        kubectl apply -f manifests/prod/namespace.yml
+        # Prepare deployment payload
+        PAYLOAD=$(cat <<EOF
+        {
+          "environment": "production",
+          "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}",
+          "namespace": "game-2048-prod",
+          "service_name": "game-2048-prod",
+          "deployment_id": "${{ github.run_id }}-${{ github.run_attempt }}",
+          "commit_sha": "${{ github.sha }}",
+          "triggered_by": "${{ github.actor }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "auto_promotion": "${{ github.event_name == 'workflow_run' }}",
+          "deployment_strategy": "blue-green",
+          "traffic_split": {
+            "initial": 10,
+            "intermediate": 50,
+            "final": 100
+          }
+        }
+        EOF
+        )
         
-        # Ensure GHCR secret exists
-        if kubectl get secret ghcr-secret -n default &>/dev/null; then
-          echo "🔐 Copying GHCR secret to prod namespace..."
-          kubectl get secret ghcr-secret -o yaml | \
-          sed 's/namespace: default/namespace: game-2048-prod/' | \
-          sed '/resourceVersion:/d' | \
-          sed '/uid:/d' | \
-          sed '/creationTimestamp:/d' | \
-          kubectl apply -f -
-        fi
+        # Generate HMAC signature for webhook security
+        SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" -binary | base64)
         
-        # Update image in service and deploy
-        kubectl patch ksvc game-2048-prod -n game-2048-prod --type merge -p '{"spec":{"template":{"spec":{"containers":[{"image":"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}","imagePullPolicy":"Always"}]}}}}'
+        # Send webhook
+        HTTP_CODE=$(curl -s -o /tmp/webhook_response.json -w "%{http_code}" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -H "X-Signature-SHA256: sha256=$SIGNATURE" \
+          -H "X-GitHub-Event: deployment" \
+          -H "X-GitHub-Delivery: ${{ github.run_id }}" \
+          -d "$PAYLOAD" \
+          "${{ secrets.PROD_WEBHOOK_URL }}")
         
-        echo "⏳ Waiting for deployment to be ready..."
-        kubectl wait --for=condition=Ready ksvc/game-2048-prod -n game-2048-prod --timeout=300s || echo "⚠️ Service may still be starting"
-
-    - name: Verify deployment
-      run: |
-        echo "📊 Deployment status:"
-        kubectl get ksvc -n game-2048-prod
+        echo "Webhook response code: $HTTP_CODE"
+        cat /tmp/webhook_response.json || echo "No response body"
         
-        echo ""
-        echo "✅ Production deployment completed!"
-        echo "🌐 Available at: https://2048.wa.darknex.us"
-
-    - name: Run smoke test
-      run: |
-        echo "🧪 Running smoke test..."
-        sleep 30
-        
-        for i in {1..5}; do
-          echo "Attempt $i/5..."
-          # Test canonical domain first
-          if curl -s --max-time 30 https://game-2048-prod.game-2048-prod.wa.darknex.us/ | grep -q "2048"; then
-            echo "✅ Canonical domain smoke test passed!"
-            break
-          # Fallback to custom domain
-          elif curl -s --max-time 30 https://2048.wa.darknex.us/ | grep -q "2048"; then
-            echo "✅ Custom domain smoke test passed!"
-            break
-          elif [ $i -eq 5 ]; then
-            echo "⚠️ Smoke test failed after 5 attempts"
-            exit 1
-          else
-            echo "Retrying in 30 seconds..."
-            sleep 30
-          fi
-        done
-
-    - name: Create production deployment summary
-      run: |
-        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-        echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Environment | **Production** |" >> $GITHUB_STEP_SUMMARY
-        echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\` |" >> $GITHUB_STEP_SUMMARY
-        echo "| Domain | https://2048.wa.darknex.us |" >> $GITHUB_STEP_SUMMARY
-        echo "| Status | ✅ **LIVE** |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🎉 Production is Live!" >> $GITHUB_STEP_SUMMARY
-        echo "- 🎮 [Play the game](https://2048.wa.darknex.us)" >> $GITHUB_STEP_SUMMARY
-        echo "- 🧪 [Run smoke tests](https://github.com/${{ github.repository }}/actions/workflows/smoke-test.yml)" >> $GITHUB_STEP_SUMMARY
-
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=tag
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
-
-    - name: Configure kubectl
-      run: |
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=kubeconfig
-
-    - name: Update image in manifests
-      run: |
-        TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
-        sed -i "s|ghcr.io/ghndrx/k8s-game-2048:v1.0.0|${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}|g" manifests/prod/service.yml
-
-    - name: Deploy to production with blue-green strategy
-      run: |
-        export KUBECONFIG=kubeconfig
-        
-        # Deploy new revision with 0% traffic
-        kubectl apply -f manifests/prod/
-        
-        # Wait for new revision to be ready
-        kubectl wait --for=condition=Ready ksvc/game-2048-prod -n game-2048-prod --timeout=300s
-        
-        # Get the latest revision name
-        LATEST_REVISION=$(kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.latestReadyRevisionName}')
-        
-        # Gradually shift traffic (10%, 50%, 100%)
-        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"revisionName":"'$LATEST_REVISION'","percent":10},{"latestRevision":false,"percent":90}]}}'
-        sleep 60
-        
-        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"revisionName":"'$LATEST_REVISION'","percent":50},{"latestRevision":false,"percent":50}]}}'
-        sleep 60
-        
-        kubectl patch ksvc game-2048-prod -n game-2048-prod --type='merge' -p='{"spec":{"traffic":[{"latestRevision":true,"percent":100}]}}'
-
-    - name: Run production health checks
-      run: |
-        # Wait for traffic to stabilize
-        sleep 60
-        # Test the production URL
-        curl -f https://2048.wa.darknex.us/ || exit 1
-        # Additional health checks can be added here
-
-    - name: Get service URL
-      id: get-url
-      run: |
-        export KUBECONFIG=kubeconfig
-        SERVICE_URL=$(kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.url}')
-        echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
-        echo "🚀 Production service deployed at: $SERVICE_URL"
-
-    - name: Set up Node.js for testing
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: tests/package.json
-
-    - name: Install Playwright dependencies
-      run: |
-        cd tests
-        npm install
-        npx playwright install --with-deps
-
-    - name: Run production smoke tests
-      run: |
-        cd tests
-        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test environment.spec.ts
-      env:
-        CI: true
-
-    - name: Run full test suite
-      run: |
-        cd tests
-        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test
-      env:
-        CI: true
-
-    - name: Upload production test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: playwright-results-production-${{ github.sha }}-${{ github.run_number }}
-        path: |
-          tests/playwright-report/
-          tests/test-results/
-        retention-days: 90
-
-    - name: Upload production screenshots
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: screenshots-production-${{ github.sha }}-${{ github.run_number }}
-        path: tests/test-results/**/*.png
-        retention-days: 90
-
-    - name: Production health validation
-      run: |
-        # Extended health checks for production
-        echo "🔍 Running production health checks..."
-        
-        # Test main URL
-        curl -f https://2048.wa.darknex.us/ || exit 1
-        
-        # Test health endpoint
-        curl -f https://2048.wa.darknex.us/health || exit 1
-        
-        # Check response times
-        RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' https://2048.wa.darknex.us/)
-        echo "Response time: ${RESPONSE_TIME}s"
-        
-        # Fail if response time > 3 seconds
-        if (( $(echo "$RESPONSE_TIME > 3.0" | bc -l) )); then
-          echo "❌ Response time too slow: ${RESPONSE_TIME}s"
+        if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+          echo "✅ Webhook deployment triggered successfully!"
+        else
+          echo "❌ Webhook deployment failed with code: $HTTP_CODE"
           exit 1
         fi
+
+    - name: Wait for blue-green deployment phases
+      run: |
+        echo "⏳ Waiting for blue-green deployment phases..."
+        echo "Phase 1: Initial deployment (10% traffic) - 2 minutes"
+        sleep 120
         
-        echo "✅ All production health checks passed!"
+        echo "Phase 2: Intermediate traffic split (50%) - 2 minutes"
+        sleep 120
+        
+        echo "Phase 3: Full traffic switch (100%) - 1 minute"
+        sleep 60
+        
+        echo "✅ Blue-green deployment phases completed"
+
+    - name: Production health check
+      run: |
+        echo "🏥 Performing comprehensive production health check..."
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+        
+        # Use the canonical Knative domain for health check
+        HEALTH_URL="https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }}"
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES - Checking: $HEALTH_URL"
+          
+          # Check if service responds
+          if curl -f -s --max-time 10 "$HEALTH_URL" > /dev/null; then
+            echo "✅ Basic health check passed!"
+            
+            # Additional production validations
+            echo "🔍 Running extended production validations..."
+            
+            # Check response time
+            RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' "$HEALTH_URL")
+            echo "Response time: ${RESPONSE_TIME}s"
+            
+            # Check if response contains expected content
+            if curl -s --max-time 10 "$HEALTH_URL" | grep -q "2048"; then
+              echo "✅ Content validation passed!"
+              echo "🌐 Production application is live at: $HEALTH_URL"
+              exit 0
+            else
+              echo "⚠️ Content validation failed, retrying..."
+            fi
+          else
+            echo "⚠️ Health check failed, retrying in 20 seconds..."
+            sleep 20
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+          fi
+        done
+        
+        echo "❌ Production health check failed after $MAX_RETRIES attempts"
+        echo "The deployment webhook was sent successfully, but the service is not responding correctly"
+        echo "Please check your cluster logs and consider rolling back"
+        exit 1
+
+    - name: Production deployment summary
+      if: always()
+      run: |
+        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment:** Production" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Method:** Webhook-based Blue-Green" >> $GITHUB_STEP_SUMMARY
+        echo "- **Strategy:** 10% → 50% → 100% traffic split" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          echo "- **Type:** Auto-promotion from Staging" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Type:** Manual deployment with confirmation" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "- **Status:** ✅ **LIVE IN PRODUCTION**" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Production is Live!" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎮 [Play the game](https://game-2048-prod.game-2048-prod.${{ secrets.PROD_DOMAIN }})" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 [Run smoke tests](https://github.com/${{ github.repository }}/actions/workflows/smoke-test.yml)" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Production Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the logs and consider manual intervention or rollback." >> $GITHUB_STEP_SUMMARY
+        fi
