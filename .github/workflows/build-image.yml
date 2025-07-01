@@ -1,0 +1,64 @@
+name: Build and Push Container Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghndrx/k8s-game-2048
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push container image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Create build summary
+      run: |
+        echo "## 📦 Container Image Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Registry | ${{ env.REGISTRY }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Image | ${{ env.IMAGE_NAME }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Tags | $(echo '${{ steps.meta.outputs.tags }}' | tr '\n' ', ') |" >> $GITHUB_STEP_SUMMARY
+        echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- 🧪 Development deployment will trigger automatically" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎭 [Deploy to staging manually](https://github.com/${{ github.repository }}/actions/workflows/deploy-staging.yml)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 [Deploy to production manually](https://github.com/${{ github.repository }}/actions/workflows/deploy-prod.yml)" >> $GITHUB_STEP_SUMMARY

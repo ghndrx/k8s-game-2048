@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: game-2048-prod
+  labels:
+    environment: production
+    app: game-2048

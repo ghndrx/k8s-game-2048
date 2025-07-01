@@ -1,0 +1,36 @@
+{
+  "name": "k8s-game-2048",
+  "version": "1.0.0",
+  "description": "2048 game deployed on Kubernetes using Knative Serving with Kourier",
+  "main": "src/index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8080 --directory src",
+    "build": "docker build -t k8s-game-2048 .",
+    "deploy:dev": "./scripts/deploy.sh dev",
+    "deploy:staging": "./scripts/deploy.sh staging",
+    "deploy:prod": "./scripts/deploy.sh prod",
+    "setup:knative": "./scripts/setup-knative.sh",
+    "setup:kourier": "./scripts/setup-kourier.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ghndrx/k8s-game-2048.git"
+  },
+  "keywords": [
+    "2048",
+    "game",
+    "kubernetes",
+    "knative",
+    "kourier",
+    "serverless",
+    "scale-to-zero"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ghndrx/k8s-game-2048/issues"
+  },
+  "homepage": "https://github.com/ghndrx/k8s-game-2048#readme",
+  "devDependencies": {},
+  "dependencies": {}
+}

@@ -1,0 +1,231 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run smoke tests every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test (dev, staging, prod, all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - dev
+        - staging
+        - prod
+
+jobs:
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: 
+          - ${{ github.event.inputs.environment == 'all' && 'dev' || github.event.inputs.environment || 'dev' }}
+          - ${{ github.event.inputs.environment == 'all' && 'staging' || '' }}
+          - ${{ github.event.inputs.environment == 'all' && 'prod' || '' }}
+        exclude:
+          - environment: ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set environment variables
+      run: |
+        case "${{ matrix.environment }}" in
+          dev)
+            echo "CANONICAL_DOMAIN=game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=development" >> $GITHUB_ENV
+            ;;
+          staging)
+            echo "CANONICAL_DOMAIN=game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=staging" >> $GITHUB_ENV
+            ;;
+          prod)
+            echo "CANONICAL_DOMAIN=game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
+            echo "ENV_NAME=production" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Test Canonical Domain Accessibility
+      run: |
+        echo "🎯 Testing canonical Knative domain: ${{ env.CANONICAL_DOMAIN }}"
+        
+        # Test HTTPS access to canonical domain
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        echo "Canonical domain HTTP response code: $response_code"
+        
+        if [ "$response_code" != "200" ]; then
+          echo "❌ Canonical domain ${{ env.CANONICAL_DOMAIN }} returned HTTP $response_code"
+          exit 1
+        else
+          echo "✅ Canonical domain ${{ env.CANONICAL_DOMAIN }} is accessible"
+        fi
+
+    - name: Test Content Validation
+      run: |
+        echo "📄 Testing content validation on canonical domain: ${{ env.CANONICAL_DOMAIN }}"
+        
+        # Download the page content from canonical domain
+        content=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        
+        # Check if it contains expected 2048 game elements
+        if echo "$content" | grep -q "2048"; then
+          echo "✅ Page contains '2048' title"
+        else
+          echo "❌ Page does not contain '2048' title"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "HOW TO PLAY"; then
+          echo "✅ Page contains game instructions"
+        else
+          echo "❌ Page does not contain game instructions"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "Environment.*${{ env.ENV_NAME }}"; then
+          echo "✅ Page shows correct environment: ${{ env.ENV_NAME }}"
+        else
+          echo "⚠️  Environment indicator not found or incorrect"
+          # Don't fail on this, just warn
+        fi
+        
+        # Check if CSS and JS files are referenced
+        if echo "$content" | grep -q "style.css"; then
+          echo "✅ CSS file is referenced"
+        else
+          echo "❌ CSS file is not referenced"
+          exit 1
+        fi
+        
+        if echo "$content" | grep -q "script.js"; then
+          echo "✅ JavaScript file is referenced"
+        else
+          echo "❌ JavaScript file is not referenced"
+          exit 1
+        fi
+
+    - name: Test Performance
+      run: |
+        echo "⚡ Testing performance for canonical domain: ${{ env.CANONICAL_DOMAIN }}"
+        
+        # Measure response time on canonical domain
+        response_time=$(curl -s -o /dev/null -w "%{time_total}" -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/)
+        echo "Canonical domain response time: ${response_time}s"
+        
+        # Check if response time is reasonable (under 10 seconds)
+        if (( $(echo "$response_time < 10.0" | bc -l) )); then
+          echo "✅ Canonical domain response time is acceptable"
+        else
+          echo "⚠️  Canonical domain response time is slow: ${response_time}s"
+        fi
+        
+        # Check content size
+        content_size=$(curl -s -L --max-time 30 https://${{ env.CANONICAL_DOMAIN }}/ | wc -c)
+        echo "Content size: $content_size bytes"
+        
+        if [ $content_size -gt 1000 ]; then
+          echo "✅ Content size is reasonable"
+        else
+          echo "❌ Content size is too small: $content_size bytes"
+          exit 1
+        fi
+
+  test-canonical-domains:
+    name: Canonical Domain Infrastructure Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'all' || github.event.inputs.environment == '' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test Canonical Domain DNS Resolution
+      run: |
+        echo "🌐 Testing canonical domain DNS resolution"
+        
+        canonical_domains=(
+          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+          "game-2048-prod.game-2048-prod.wa.darknex.us"
+        )
+        
+        for domain in "${canonical_domains[@]}"; do
+          echo "Testing DNS for canonical domain: $domain"
+          ip=$(dig +short $domain)
+          if [ -n "$ip" ]; then
+            echo "✅ $domain resolves to: $ip"
+          else
+            echo "❌ $domain does not resolve"
+            exit 1
+          fi
+        done
+
+    - name: Test Canonical Domain SSL Certificate Chain
+      run: |
+        echo "🔐 Testing SSL certificate chains for canonical domains"
+        
+        canonical_domains=(
+          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
+          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
+          "game-2048-prod.game-2048-prod.wa.darknex.us"
+        )
+        
+        for domain in "${canonical_domains[@]}"; do
+          echo "Testing SSL chain for canonical domain: $domain"
+          
+          # Test certificate chain
+          chain_result=$(echo | openssl s_client -servername $domain -connect $domain:443 -verify_return_error 2>&1)
+          
+          if echo "$chain_result" | grep -q "Verify return code: 0"; then
+            echo "✅ $domain has valid SSL certificate chain"
+          else
+            echo "❌ $domain has invalid SSL certificate chain"
+            echo "$chain_result"
+            exit 1
+          fi
+        done
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [smoke-tests, test-canonical-domains]
+    if: always()
+    
+    steps:
+    - name: Check test results
+      run: |
+        if [ "${{ needs.smoke-tests.result }}" = "success" ] && [ "${{ needs.test-canonical-domains.result }}" = "success" ]; then
+          echo "✅ All tests passed successfully!"
+          echo "🎮 2048 game is working correctly across all environments using canonical Knative domains"
+        else
+          echo "❌ Some tests failed"
+          echo "Smoke tests: ${{ needs.smoke-tests.result }}"
+          echo "Canonical domain tests: ${{ needs.test-canonical-domains.result }}"
+          exit 1
+        fi
+
+    - name: Post summary
+      if: always()
+      run: |
+        echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Type | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Canonical Domain Tests | ${{ needs.test-canonical-domains.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Tested Canonical Domains" >> $GITHUB_STEP_SUMMARY
+        echo "- 🧪 Development: https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎭 Staging: https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_STEP_SUMMARY
+        echo "- 🚀 Production: https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,26 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: game-2048-prod
+  namespace: game-2048-prod
+  labels:
+    app: game-2048
+    environment: production
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/target: "100"
+    spec:
+      containers:
+      - image: ghcr.io/ghndrx/k8s-game-2048:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+      imagePullSecrets:
+      - name: ghcr-secret
