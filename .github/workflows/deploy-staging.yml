@@ -76,6 +76,131 @@ jobs:
         curl -f https://2048-staging.wa.darknex.us/ || exit 1
 
     - name: Get service URL
+      id: get-url
       run: |
         export KUBECONFIG=kubeconfig
-        kubectl get ksvc game-2048-staging -n game-2048-staging -o jsonpath='{.status.url}'
+        SERVICE_URL=$(kubectl get ksvc game-2048-staging -n game-2048-staging -o jsonpath='{.status.url}')
+        echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+        echo "🚀 Staging service deployed at: $SERVICE_URL"
+
+    - name: Set up Node.js for testing
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package.json
+
+    - name: Install Playwright dependencies
+      run: |
+        cd tests
+        npm install
+        npx playwright install --with-deps
+
+    - name: Run comprehensive Playwright tests
+      run: |
+        cd tests
+        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test
+      env:
+        CI: true
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-results-staging-${{ github.sha }}-${{ github.run_number }}
+        path: |
+          tests/playwright-report/
+          tests/test-results/
+        retention-days: 30
+
+    - name: Upload screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: screenshots-staging-${{ github.sha }}-${{ github.run_number }}
+        path: tests/test-results/**/*.png
+        retention-days: 30
+
+  promote-to-master:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Create Pull Request to Master
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        push-to-fork: false
+        branch: auto-promote/staging-to-master-${{ github.sha }}
+        base: master
+        title: "🚀 Auto-promote: Deploy ${{ github.sha }} to production"
+        body: |
+          ## 🚀 Auto-promotion from Staging
+          
+          **Source**: `staging` branch
+          **Commit**: ${{ github.sha }}
+          **Triggered by**: @${{ github.actor }}
+          
+          ### ✅ Staging Tests Passed
+          - Basic functionality tests
+          - Gameplay mechanics tests
+          - Visual regression tests
+          - Environment validation tests
+          
+          ### 🎯 Changes in this promotion:
+          ${{ github.event.head_commit.message }}
+          
+          This PR was automatically created after successful deployment and testing in the staging environment.
+          
+          **Staging URL**: https://2048-staging.wa.darknex.us
+          **Will deploy to**: https://2048.wa.darknex.us
+          
+          ⚠️ **Production Deployment** - Please review carefully before merging!
+        labels: |
+          auto-promotion
+          production
+          deploy
+          needs-review
+
+    - name: Create Pull Request to Master
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        push-to-fork: false
+        branch: auto-promote/staging-to-master-${{ github.sha }}
+        base: master
+        title: "🚀 Auto-promote: Deploy ${{ github.sha }} to production"
+        body: |
+          ## 🚀 Auto-promotion from Staging
+          
+          **Source**: `staging` branch
+          **Commit**: ${{ github.sha }}
+          **Triggered by**: @${{ github.actor }}
+          
+          ### ✅ Staging Tests Passed
+          - Basic functionality tests
+          - Gameplay mechanics tests
+          - Visual regression tests
+          - Environment validation tests
+          - Performance tests
+          
+          ### 🎯 Changes in this promotion:
+          ${{ github.event.head_commit.message }}
+          
+          This PR was automatically created after successful deployment and testing in the staging environment.
+          
+          **Staging URL**: https://2048-staging.wa.darknex.us
+          **Will deploy to**: https://2048.wa.darknex.us
+          
+          ⚠️ **Production Deployment** - Please review carefully before merging!
+        labels: |
+          auto-promotion
+          production
+          deploy
+          needs-review

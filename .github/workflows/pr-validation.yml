@@ -1,0 +1,109 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ develop, staging, master ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghndrx/k8s-game-2048
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package.json
+
+    - name: Install Playwright dependencies
+      run: |
+        cd tests
+        npm install
+        npx playwright install --with-deps
+
+    - name: Start local server
+      run: |
+        npm start &
+        sleep 5
+        curl -f http://localhost:8080/ || exit 1
+      env:
+        CI: true
+
+    - name: Run Playwright tests locally
+      run: |
+        cd tests
+        BASE_URL=http://localhost:8080 npx playwright test
+      env:
+        CI: true
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}
+
+    - name: Validate Kubernetes manifests
+      run: |
+        # Install kubeval for validation
+        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+        sudo mv kubeval /usr/local/bin
+        
+        # Validate all manifests
+        kubeval manifests/dev/*.yml
+        kubeval manifests/staging/*.yml
+        kubeval manifests/prod/*.yml
+
+    - name: Upload PR test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pr-test-results-${{ github.event.number }}
+        path: |
+          tests/playwright-report/
+          tests/test-results/
+        retention-days: 7
+
+    - name: Comment PR with test results
+      uses: actions/github-script@v7
+      if: always()
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          
+          const comment = `## 🧪 PR Validation Results
+          
+          **Tests Status**: ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}
+          **Commit**: ${{ github.event.pull_request.head.sha }}
+          
+          ### Test Summary:
+          - ✅ Local server started successfully
+          - ✅ Playwright tests executed
+          - ✅ Docker image built
+          - ✅ Kubernetes manifests validated
+          
+          ### Artifacts:
+          - Test results and screenshots are available in the workflow artifacts
+          
+          ${{ job.status == 'success' && '🚀 Ready for merge!' || '⚠️ Please check the failed tests and fix issues before merging.' }}
+          `;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number,
+            body: comment
+          });

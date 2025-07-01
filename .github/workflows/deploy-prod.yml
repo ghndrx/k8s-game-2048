@@ -100,6 +100,77 @@ jobs:
         # Additional health checks can be added here
 
     - name: Get service URL
+      id: get-url
       run: |
         export KUBECONFIG=kubeconfig
-        kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.url}'
+        SERVICE_URL=$(kubectl get ksvc game-2048-prod -n game-2048-prod -o jsonpath='{.status.url}')
+        echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+        echo "🚀 Production service deployed at: $SERVICE_URL"
+
+    - name: Set up Node.js for testing
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package.json
+
+    - name: Install Playwright dependencies
+      run: |
+        cd tests
+        npm install
+        npx playwright install --with-deps
+
+    - name: Run production smoke tests
+      run: |
+        cd tests
+        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test environment.spec.ts
+      env:
+        CI: true
+
+    - name: Run full test suite
+      run: |
+        cd tests
+        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test
+      env:
+        CI: true
+
+    - name: Upload production test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-results-production-${{ github.sha }}-${{ github.run_number }}
+        path: |
+          tests/playwright-report/
+          tests/test-results/
+        retention-days: 90
+
+    - name: Upload production screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: screenshots-production-${{ github.sha }}-${{ github.run_number }}
+        path: tests/test-results/**/*.png
+        retention-days: 90
+
+    - name: Production health validation
+      run: |
+        # Extended health checks for production
+        echo "🔍 Running production health checks..."
+        
+        # Test main URL
+        curl -f https://2048.wa.darknex.us/ || exit 1
+        
+        # Test health endpoint
+        curl -f https://2048.wa.darknex.us/health || exit 1
+        
+        # Check response times
+        RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' https://2048.wa.darknex.us/)
+        echo "Response time: ${RESPONSE_TIME}s"
+        
+        # Fail if response time > 3 seconds
+        if (( $(echo "$RESPONSE_TIME > 3.0" | bc -l) )); then
+          echo "❌ Response time too slow: ${RESPONSE_TIME}s"
+          exit 1
+        fi
+        
+        echo "✅ All production health checks passed!"

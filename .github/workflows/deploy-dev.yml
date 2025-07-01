@@ -71,6 +71,91 @@ jobs:
         kubectl wait --for=condition=Ready ksvc/game-2048-dev -n game-2048-dev --timeout=300s
 
     - name: Get service URL
+      id: get-url
       run: |
         export KUBECONFIG=kubeconfig
-        kubectl get ksvc game-2048-dev -n game-2048-dev -o jsonpath='{.status.url}'
+        SERVICE_URL=$(kubectl get ksvc game-2048-dev -n game-2048-dev -o jsonpath='{.status.url}')
+        echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+        echo "🚀 Development service deployed at: $SERVICE_URL"
+
+    - name: Set up Node.js for testing
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package.json
+
+    - name: Install Playwright dependencies
+      run: |
+        cd tests
+        npm install
+        npx playwright install --with-deps
+
+    - name: Run Playwright tests
+      run: |
+        cd tests
+        BASE_URL=${{ steps.get-url.outputs.service_url }} npx playwright test
+      env:
+        CI: true
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-results-dev-${{ github.sha }}-${{ github.run_number }}
+        path: |
+          tests/playwright-report/
+          tests/test-results/
+        retention-days: 30
+
+    - name: Upload screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: screenshots-dev-${{ github.sha }}-${{ github.run_number }}
+        path: tests/test-results/**/*.png
+        retention-days: 30
+
+  promote-to-staging:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Create Pull Request to Staging
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        push-to-fork: false
+        branch: auto-promote/dev-to-staging-${{ github.sha }}
+        base: staging
+        title: "🚀 Auto-promote: Deploy ${{ github.sha }} to staging"
+        body: |
+          ## 🚀 Auto-promotion from Development
+          
+          **Source**: `develop` branch
+          **Commit**: ${{ github.sha }}
+          **Triggered by**: @${{ github.actor }}
+          
+          ### ✅ Development Tests Passed
+          - Basic functionality tests
+          - Gameplay mechanics tests  
+          - Visual regression tests
+          - Environment validation tests
+          
+          ### 🎯 Changes in this promotion:
+          ${{ github.event.head_commit.message }}
+          
+          This PR was automatically created after successful deployment and testing in the development environment.
+          
+          **Development URL**: https://2048-dev.wa.darknex.us
+          **Will deploy to**: https://2048-staging.wa.darknex.us
+        labels: |
+          auto-promotion
+          staging
+          deploy
