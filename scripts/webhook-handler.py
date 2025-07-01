@@ -38,8 +38,13 @@ def verify_signature(payload, signature):
 def run_command(cmd, **kwargs):
     """Run shell command with logging"""
     logger.info(f"Running command: {' '.join(cmd)}")
+    
+    # Set up environment for kubectl to use in-cluster config
+    env = os.environ.copy()
+    env['KUBECONFIG'] = ''  # Force kubectl to use in-cluster config
+    
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, **kwargs)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env, **kwargs)
         logger.info(f"Command output: {result.stdout}")
         return result
     except subprocess.CalledProcessError as e:
