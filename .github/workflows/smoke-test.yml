@@ -44,15 +44,15 @@ jobs:
       run: |
         case "${{ matrix.environment }}" in
           dev)
-            echo "CANONICAL_DOMAIN=https://${{ secrets.DEV_DOMAIN }}" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.DEV_CANONICAL_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=development" >> $GITHUB_ENV
             ;;
           staging)
-            echo "CANONICAL_DOMAIN=https://${{ secrets.STAGING_DOMAIN }}" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.STAGING_CANONICAL_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=staging" >> $GITHUB_ENV
             ;;
           prod)
-            echo "CANONICAL_DOMAIN=https://${{ secrets.PROD_DOMAIN }}" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.PROD_CANONICAL_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=production" >> $GITHUB_ENV
             ;;
         esac
@@ -157,9 +157,9 @@ jobs:
         
         # Canonical domains (Knative domains only)
         canonical_domains=(
-          "${{ secrets.DEV_DOMAIN }}"
-          "${{ secrets.STAGING_DOMAIN }}"
-          "${{ secrets.PROD_DOMAIN }}"
+          "${{ secrets.DEV_CANONICAL_DOMAIN }}"
+          "${{ secrets.STAGING_CANONICAL_DOMAIN }}"
+          "${{ secrets.PROD_CANONICAL_DOMAIN }}"
         )
         
         for domain in "${canonical_domains[@]}"; do
@@ -179,9 +179,9 @@ jobs:
         
         # Canonical domains (Knative domains only)
         canonical_domains=(
-          "${{ secrets.DEV_DOMAIN }}"
-          "${{ secrets.STAGING_DOMAIN }}"
-          "${{ secrets.PROD_DOMAIN }}"
+          "${{ secrets.DEV_CANONICAL_DOMAIN }}"
+          "${{ secrets.STAGING_CANONICAL_DOMAIN }}"
+          "${{ secrets.PROD_CANONICAL_DOMAIN }}"
         )
         
         for domain in "${canonical_domains[@]}"; do
@@ -231,9 +231,9 @@ jobs:
         echo "### Tested Canonical Domains" >> $GITHUB_STEP_SUMMARY
         
         # Use canonical domain format
-        DEV_URL="https://${{ secrets.DEV_DOMAIN }}"
-        STAGING_URL="https://${{ secrets.STAGING_DOMAIN }}"
-        PROD_URL="https://${{ secrets.PROD_DOMAIN }}"
+        DEV_URL="https://${{ secrets.DEV_CANONICAL_DOMAIN }}"
+        STAGING_URL="https://${{ secrets.STAGING_CANONICAL_DOMAIN }}"
+        PROD_URL="https://${{ secrets.PROD_CANONICAL_DOMAIN }}"
         
         echo "- 🧪 Development: $DEV_URL" >> $GITHUB_STEP_SUMMARY
         echo "- 🎭 Staging: $STAGING_URL" >> $GITHUB_STEP_SUMMARY

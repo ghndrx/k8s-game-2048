@@ -223,9 +223,9 @@ graph TD
 | `DEV_WEBHOOK_URL` | Development deployment endpoint | Deploy to Development |
 | `STAGING_WEBHOOK_URL` | Staging deployment endpoint | Deploy to Staging |
 | `PROD_WEBHOOK_URL` | Production deployment endpoint | Deploy to Production |
-| `DEV_DOMAIN` | Development domain suffix | Smoke Tests |
-| `STAGING_DOMAIN` | Staging domain suffix | Smoke Tests |
-| `PROD_DOMAIN` | Production domain suffix | Smoke Tests |
+| `DEV_CANONICAL_DOMAIN` | Development canonical domain | Smoke Tests |
+| `STAGING_CANONICAL_DOMAIN` | Staging canonical domain | Smoke Tests |
+| `PROD_CANONICAL_DOMAIN` | Production canonical domain | Smoke Tests |
 
 ### Environment URLs
 

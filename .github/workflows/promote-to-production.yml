@@ -102,9 +102,9 @@ jobs:
         echo "### 🎮 Deployment Status" >> $GITHUB_STEP_SUMMARY
         
         # Use canonical domain format (these are the Knative domains)
-        DEV_URL="https://${{ secrets.DEV_DOMAIN }}"
-        STAGING_URL="https://${{ secrets.STAGING_DOMAIN }}"
-        PROD_URL="https://${{ secrets.PROD_DOMAIN }}"
+        DEV_URL="https://${{ secrets.DEV_CANONICAL_DOMAIN }}"
+        STAGING_URL="https://${{ secrets.STAGING_CANONICAL_DOMAIN }}"
+        PROD_URL="https://${{ secrets.PROD_CANONICAL_DOMAIN }}"
         
         echo "- **Development**: ✅ Live at $DEV_URL" >> $GITHUB_STEP_SUMMARY
         echo "- **Staging**: ✅ Live at $STAGING_URL" >> $GITHUB_STEP_SUMMARY

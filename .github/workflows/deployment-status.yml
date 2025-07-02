@@ -15,7 +15,7 @@ jobs:
     - name: Check Development Status
       run: |
         echo "🧪 Checking Development Environment..."
-        DEV_URL="https://${{ secrets.DEV_DOMAIN }}"
+        DEV_URL="https://${{ secrets.DEV_CANONICAL_DOMAIN }}"
         
         DEV_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$DEV_URL" || echo "000")
         DEV_VERSION=$(curl -s -L --max-time 30 "$DEV_URL" | grep -o '<title>[^<]*</title>' | sed 's/<title>\(.*\)<\/title>/\1/' || echo "Unknown")
@@ -28,7 +28,7 @@ jobs:
     - name: Check Staging Status
       run: |
         echo "🎭 Checking Staging Environment..."
-        STAGING_URL="https://${{ secrets.STAGING_DOMAIN }}"
+        STAGING_URL="https://${{ secrets.STAGING_CANONICAL_DOMAIN }}"
         
         STAGING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$STAGING_URL" || echo "000")
         STAGING_VERSION=$(curl -s -L --max-time 30 "$STAGING_URL" | grep -o '<title>[^<]*</title>' | sed 's/<title>\(.*\)<\/title>/\1/' || echo "Unknown")
@@ -41,7 +41,7 @@ jobs:
     - name: Check Production Status
       run: |
         echo "🚀 Checking Production Environment..."
-        PROD_URL="https://${{ secrets.PROD_DOMAIN }}"
+        PROD_URL="https://${{ secrets.PROD_CANONICAL_DOMAIN }}"
         
         PROD_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 30 "$PROD_URL" || echo "000")
         PROD_VERSION=$(curl -s -L --max-time 30 "$PROD_URL" | grep -o '<title>[^<]*</title>' | sed 's/<title>\(.*\)<\/title>/\1/' || echo "Unknown")
@@ -64,7 +64,7 @@ jobs:
         else
           DEV_ICON="❌"
         fi
-        echo "| 🧪 Development | $DEV_ICON HTTP $DEV_STATUS | $DEV_VERSION | https://${{ secrets.DEV_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🧪 Development | $DEV_ICON HTTP $DEV_STATUS | $DEV_VERSION | https://${{ secrets.DEV_CANONICAL_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
         
         # Staging status
         if [ "$STAGING_STATUS" = "200" ]; then
@@ -72,7 +72,7 @@ jobs:
         else
           STAGING_ICON="❌"
         fi
-        echo "| 🎭 Staging | $STAGING_ICON HTTP $STAGING_STATUS | $STAGING_VERSION | https://${{ secrets.STAGING_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🎭 Staging | $STAGING_ICON HTTP $STAGING_STATUS | $STAGING_VERSION | https://${{ secrets.STAGING_CANONICAL_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
         
         # Production status
         if [ "$PROD_STATUS" = "200" ]; then
@@ -80,7 +80,7 @@ jobs:
         else
           PROD_ICON="❌"
         fi
-        echo "| 🚀 Production | $PROD_ICON HTTP $PROD_STATUS | $PROD_VERSION | https://${{ secrets.PROD_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🚀 Production | $PROD_ICON HTTP $PROD_STATUS | $PROD_VERSION | https://${{ secrets.PROD_CANONICAL_DOMAIN }} |" >> $GITHUB_STEP_SUMMARY
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔧 Emergency Actions Available" >> $GITHUB_STEP_SUMMARY
