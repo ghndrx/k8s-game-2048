@@ -44,15 +44,15 @@ jobs:
       run: |
         case "${{ matrix.environment }}" in
           dev)
-            echo "CANONICAL_DOMAIN=https://game-2048-dev.game-2048-dev.dev.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.DEV_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=development" >> $GITHUB_ENV
             ;;
           staging)
-            echo "CANONICAL_DOMAIN=https://game-2048-staging.game-2048-staging.staging.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.STAGING_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=staging" >> $GITHUB_ENV
             ;;
           prod)
-            echo "CANONICAL_DOMAIN=https://game-2048-prod.game-2048-prod.wa.darknex.us" >> $GITHUB_ENV
+            echo "CANONICAL_DOMAIN=https://${{ secrets.PROD_DOMAIN }}" >> $GITHUB_ENV
             echo "ENV_NAME=production" >> $GITHUB_ENV
             ;;
         esac
@@ -157,9 +157,9 @@ jobs:
         
         # Canonical domains (Knative domains only)
         canonical_domains=(
-          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
-          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
-          "game-2048-prod.game-2048-prod.wa.darknex.us"
+          "${{ secrets.DEV_DOMAIN }}"
+          "${{ secrets.STAGING_DOMAIN }}"
+          "${{ secrets.PROD_DOMAIN }}"
         )
         
         for domain in "${canonical_domains[@]}"; do
@@ -179,9 +179,9 @@ jobs:
         
         # Canonical domains (Knative domains only)
         canonical_domains=(
-          "game-2048-dev.game-2048-dev.dev.wa.darknex.us"
-          "game-2048-staging.game-2048-staging.staging.wa.darknex.us"
-          "game-2048-prod.game-2048-prod.wa.darknex.us"
+          "${{ secrets.DEV_DOMAIN }}"
+          "${{ secrets.STAGING_DOMAIN }}"
+          "${{ secrets.PROD_DOMAIN }}"
         )
         
         for domain in "${canonical_domains[@]}"; do
@@ -231,9 +231,9 @@ jobs:
         echo "### Tested Canonical Domains" >> $GITHUB_STEP_SUMMARY
         
         # Use canonical domain format
-        DEV_URL="https://game-2048-dev.game-2048-dev.dev.wa.darknex.us"
-        STAGING_URL="https://game-2048-staging.game-2048-staging.staging.wa.darknex.us"
-        PROD_URL="https://game-2048-prod.game-2048-prod.wa.darknex.us"
+        DEV_URL="https://${{ secrets.DEV_DOMAIN }}"
+        STAGING_URL="https://${{ secrets.STAGING_DOMAIN }}"
+        PROD_URL="https://${{ secrets.PROD_DOMAIN }}"
         
         echo "- 🧪 Development: $DEV_URL" >> $GITHUB_STEP_SUMMARY
         echo "- 🎭 Staging: $STAGING_URL" >> $GITHUB_STEP_SUMMARY

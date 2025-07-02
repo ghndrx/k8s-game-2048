@@ -28,10 +28,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - webhook.wa.darknex.us
+    - ${WEBHOOK_DOMAIN}
     secretName: webhook-tls
   rules:
-  - host: webhook.wa.darknex.us
+  - host: ${WEBHOOK_DOMAIN}
     http:
       paths:
       - path: /

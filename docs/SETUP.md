@@ -58,7 +58,7 @@ kubectl patch configmap/config-network \
 kubectl patch configmap/config-domain \
   --namespace knative-serving \
   --type merge \
-  --patch '{"data":{"wa.darknex.us":""}}'
+  --patch "{\"data\":{\"${KNATIVE_DOMAIN}\":\"\"}}"
 ```
 
 ### 4. Set up TLS (Optional but Recommended)
@@ -79,7 +79,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@darknex.us
+    email: ${CERT_EMAIL}
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
@@ -112,10 +112,10 @@ After installation, configure your DNS to point to the Kourier LoadBalancer:
 
 2. **Create DNS records**:
    ```
-   2048-dev.wa.darknex.us      -> LoadBalancer IP
-   2048-staging.wa.darknex.us  -> LoadBalancer IP
-   2048.wa.darknex.us          -> LoadBalancer IP
-   *.wa.darknex.us             -> LoadBalancer IP (wildcard)
+   ${DEV_DOMAIN}      -> LoadBalancer IP
+   ${STAGING_DOMAIN}  -> LoadBalancer IP
+   ${PROD_DOMAIN}          -> LoadBalancer IP
+   *.${BASE_DOMAIN}             -> LoadBalancer IP (wildcard)
    ```
 
 ## Verification
@@ -153,7 +153,7 @@ kubectl get ksvc -n game-2048-dev
 
 3. **TLS certificates not issued**:
    - Check cert-manager logs: `kubectl logs -n cert-manager -l app=cert-manager`
-   - Verify DNS propagation: `dig 2048-dev.wa.darknex.us`
+   - Verify DNS propagation: `dig ${DEV_DOMAIN}`
 
 4. **Service not accessible**:
    - Check Kourier gateway logs: `kubectl logs -n kourier-system -l app=3scale-kourier-gateway`

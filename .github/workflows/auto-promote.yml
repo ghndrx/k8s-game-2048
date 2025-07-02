@@ -80,4 +80,7 @@ jobs:
         echo "### 🔗 Next Steps" >> $GITHUB_STEP_SUMMARY
         echo "- Staging deployment will start automatically" >> $GITHUB_STEP_SUMMARY
         echo "- Staging tests will run automatically" >> $GITHUB_STEP_SUMMARY
-        echo "- Production promotion requires manual approval via staging → main merge" >> $GITHUB_STEP_SUMMARY
+        echo "- Production promotion will happen automatically after staging tests pass" >> $GITHUB_STEP_SUMMARY
+        echo "- Production deployment will happen automatically after promotion" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🚀 **Fully Automatic Pipeline** - No manual intervention required!" >> $GITHUB_STEP_SUMMARY

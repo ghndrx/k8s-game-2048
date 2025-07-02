@@ -14,8 +14,8 @@ NC='\033[0m' # No Color
 
 # Test configuration
 ENVIRONMENTS=("dev" "staging" "prod")
-DOMAINS=("2048-dev.wa.darknex.us" "2048-staging.wa.darknex.us" "2048.wa.darknex.us")
-CANONICAL_DOMAINS=("game-2048-dev.game-2048-dev.dev.wa.darknex.us" "game-2048-staging.game-2048-staging.staging.wa.darknex.us" "game-2048-prod.game-2048-prod.wa.darknex.us")
+DOMAINS=("${DEV_DOMAIN}" "${STAGING_DOMAIN}" "${PROD_DOMAIN}")
+CANONICAL_DOMAINS=("${DEV_CANONICAL_DOMAIN}" "${STAGING_CANONICAL_DOMAIN}" "${PROD_CANONICAL_DOMAIN}")
 TIMEOUT=30
 
 echo -e "${BLUE}🧪 Starting 2048 Game Smoke Tests${NC}"

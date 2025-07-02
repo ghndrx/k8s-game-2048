@@ -4,13 +4,13 @@ metadata:
   name: config-domain
   namespace: knative-serving
 data:
-  dev.wa.darknex.us: |
+  dev.${BASE_DOMAIN}: |
     selector:
       environment: development
-  staging.wa.darknex.us: |
+  staging.${BASE_DOMAIN}: |
     selector:
       environment: staging
-  wa.darknex.us: |
+  ${BASE_DOMAIN}: |
     selector:
       environment: production
   autocreate-cluster-domain-claims: "true"

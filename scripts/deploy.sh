@@ -6,7 +6,7 @@
 set -e
 
 ENVIRONMENT=${1:-all}
-REGISTRY="ghcr.io/ghndrx/k8s-game-2048"
+REGISTRY="${CONTAINER_REGISTRY}/${GITHUB_REPOSITORY}"
 
 echo "🚀 Deploying 2048 game with Istio + nginx SSL..."
 echo "Environment: $ENVIRONMENT"
@@ -84,13 +84,13 @@ echo "✅ Deployment completed!"
 echo ""
 echo "� Your 2048 game is available at:"
 if [ "$ENVIRONMENT" = "all" ] || [ "$ENVIRONMENT" = "dev" ]; then
-    echo "   Development:  https://2048-dev.wa.darknex.us"
+    echo "   Development:  https://${DEV_DOMAIN}"
 fi
 if [ "$ENVIRONMENT" = "all" ] || [ "$ENVIRONMENT" = "staging" ]; then
-    echo "   Staging:      https://2048-staging.wa.darknex.us"
+    echo "   Staging:      https://${STAGING_DOMAIN}"
 fi
 if [ "$ENVIRONMENT" = "all" ] || [ "$ENVIRONMENT" = "prod" ]; then
-    echo "   Production:   https://2048.wa.darknex.us"
+    echo "   Production:   https://${PROD_DOMAIN}"
 fi
 echo ""
 echo "🔧 Check status with:"

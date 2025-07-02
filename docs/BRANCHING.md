@@ -15,21 +15,21 @@ master (production)
 
 ### 🟢 Development Environment
 - **Branch**: `develop`
-- **Domain**: `2048-dev.wa.darknex.us`
+- **Domain**: `${DEV_DOMAIN}`
 - **Trigger**: Push to `develop` branch
 - **Auto-deploy**: ✅ Yes
 - **Purpose**: Latest development features, may be unstable
 
 ### 🟡 Staging Environment  
 - **Branch**: `staging`
-- **Domain**: `2048-staging.wa.darknex.us`
+- **Domain**: `${STAGING_DOMAIN}`
 - **Trigger**: Push to `staging` branch
 - **Auto-deploy**: ✅ Yes
 - **Purpose**: Pre-production testing, stable features
 
 ### 🔴 Production Environment
 - **Branch**: `master`
-- **Domain**: `2048.wa.darknex.us`
+- **Domain**: `${PROD_DOMAIN}`
 - **Trigger**: Push to `master` branch OR GitHub Release
 - **Auto-deploy**: ✅ Yes
 - **Purpose**: Live production environment
@@ -59,7 +59,7 @@ git push origin feature/awesome-new-feature
 
 ```bash
 # 1. Merge feature to develop (via PR)
-# 2. Test in dev environment: 2048-dev.wa.darknex.us
+# 2. Test in dev environment: ${DEV_DOMAIN}
 
 # 3. Promote to staging
 git checkout staging
@@ -67,7 +67,7 @@ git pull origin staging
 git merge develop
 git push origin staging
 
-# 4. Test in staging: 2048-staging.wa.darknex.us
+# 4. Test in staging: ${STAGING_DOMAIN}
 ```
 
 ### Deploying to Production
@@ -83,7 +83,7 @@ git push origin master
 git tag -a v1.0.0 -m "Release version 1.0.0"
 git push origin v1.0.0
 
-# 3. Production deploys automatically: 2048.wa.darknex.us
+# 3. Production deploys automatically: ${PROD_DOMAIN}
 ```
 
 ### Hotfix Flow

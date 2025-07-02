@@ -10,15 +10,15 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Host game-2048-dev.game-2048-dev.dev.wa.darknex.us;
+      proxy_set_header Host ${DEV_CANONICAL_DOMAIN};
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - 2048-dev.wa.darknex.us
+    - ${DEV_DOMAIN}
     secretName: game-2048-dev-nginx-tls
   rules:
-  - host: 2048-dev.wa.darknex.us
+  - host: ${DEV_DOMAIN}
     http:
       paths:
       - path: /
@@ -41,15 +41,15 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Host game-2048-staging.game-2048-staging.staging.wa.darknex.us;
+      proxy_set_header Host ${STAGING_CANONICAL_DOMAIN};
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - 2048-staging.wa.darknex.us
+    - ${STAGING_DOMAIN}
     secretName: game-2048-staging-nginx-tls
   rules:
-  - host: 2048-staging.wa.darknex.us
+  - host: ${STAGING_DOMAIN}
     http:
       paths:
       - path: /
@@ -72,15 +72,15 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Host game-2048-prod.game-2048-prod.wa.darknex.us;
+      proxy_set_header Host ${PROD_CANONICAL_DOMAIN};
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - 2048.wa.darknex.us
+    - ${PROD_DOMAIN}
     secretName: game-2048-prod-nginx-tls
   rules:
-  - host: 2048.wa.darknex.us
+  - host: ${PROD_DOMAIN}
     http:
       paths:
       - path: /

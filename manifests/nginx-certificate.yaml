@@ -9,7 +9,7 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - "2048-dev.wa.darknex.us"
+  - "${DEV_DOMAIN}"
 
 ---
 apiVersion: cert-manager.io/v1
@@ -23,7 +23,7 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - "2048-staging.wa.darknex.us"
+  - "${STAGING_DOMAIN}"
 
 ---
 apiVersion: cert-manager.io/v1
@@ -37,4 +37,4 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - "2048.wa.darknex.us"
+  - "${PROD_DOMAIN}"

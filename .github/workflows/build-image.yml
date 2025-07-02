@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghndrx/k8s-game-2048
+  IMAGE_NAME: ${GITHUB_REPOSITORY}
 
 jobs:
   build:

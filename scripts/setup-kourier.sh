@@ -75,7 +75,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@darknex.us
+    email: ${CERT_EMAIL}
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
@@ -98,10 +98,10 @@ kubectl get svc kourier -n kourier-system -o wide
 echo ""
 echo "📋 Next steps:"
 echo "1. Configure your DNS to point the following domains to the LoadBalancer IP:"
-echo "   - 2048-dev.wa.darknex.us"
-echo "   - 2048-staging.wa.darknex.us"
-echo "   - 2048.wa.darknex.us"
-echo "   - *.wa.darknex.us (wildcard)"
+echo "   - ${DEV_DOMAIN}"
+echo "   - ${STAGING_DOMAIN}"
+echo "   - ${PROD_DOMAIN}"
+echo "   - *.${BASE_DOMAIN} (wildcard)"
 echo ""
 echo "2. Deploy your applications:"
 echo "   kubectl apply -f manifests/dev/"

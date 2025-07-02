@@ -32,7 +32,7 @@ Configure these secrets in your GitHub repository settings:
 
 ### Security
 - `WEBHOOK_SECRET` - Shared secret for HMAC signature verification
-- `KNATIVE_DOMAIN` - Your Knative cluster domain (e.g., `staging.wa.darknex.us`)
+- `KNATIVE_DOMAIN` - Your Knative cluster domain (e.g., `staging.${BASE_DOMAIN}`)
 
 ## Webhook Handler Implementation
 

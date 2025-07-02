@@ -46,9 +46,9 @@ We use a GitFlow-inspired workflow:
 
 | Environment | Branch | Domain | Auto-Deploy |
 |-------------|--------|---------|------------|
-| Development | `develop` | `2048-dev.wa.darknex.us` | ✅ |
-| Staging | `staging` | `2048-staging.wa.darknex.us` | ✅ |
-| Production | `master` | `2048.wa.darknex.us` | ✅ |
+| Development | `develop` | `${DEV_DOMAIN}` | ✅ |
+| Staging | `staging` | `${STAGING_DOMAIN}` | ✅ |
+| Production | `master` | `${PROD_DOMAIN}` | ✅ |
 
 ## Making Changes
 
@@ -113,7 +113,7 @@ kubectl apply -f manifests/dev/
 kubectl get ksvc -n game-2048-dev
 
 # Test the deployed service
-curl -f https://2048-dev.wa.darknex.us/
+curl -f https://${DEV_DOMAIN}/
 ```
 
 ## Code Style

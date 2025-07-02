@@ -15,8 +15,8 @@ fi
 # Configuration with fallbacks
 WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
 MANIFESTS_PATH="${MANIFESTS_PATH:-/home/administrator/k8s-game-2048/manifests}"
-WEBHOOK_DOMAIN="${WEBHOOK_DOMAIN:-webhook.wa.darknex.us}"
-KNATIVE_DOMAIN="${KNATIVE_DOMAIN:-wa.darknex.us}"
+WEBHOOK_DOMAIN="${WEBHOOK_DOMAIN:-webhook.${BASE_DOMAIN}}"
+KNATIVE_DOMAIN="${KNATIVE_DOMAIN:-${BASE_DOMAIN}}"
 KUBECONFIG_PATH="${KUBECONFIG_PATH:-/etc/rancher/k3s/k3s.yaml}"
 DEPLOY_INGRESS="${DEPLOY_INGRESS:-true}"
 WEBHOOK_REPLICAS="${WEBHOOK_REPLICAS:-1}"

@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ghndrx/k8s-game-2048.git"
+    "url": "git+https://github.com/${GITHUB_REPOSITORY}.git"
   },
   "keywords": [
     "2048",

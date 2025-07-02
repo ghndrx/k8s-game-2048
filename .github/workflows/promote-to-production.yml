@@ -1,4 +1,4 @@
-name: Promote to Production
+name: Auto-Promote to Production
 
 on:
   workflow_run:
@@ -8,11 +8,8 @@ on:
     branches: [ staging ]
   workflow_dispatch:
     inputs:
-      confirmation:
-        description: 'Type "PROMOTE" to confirm staging → production promotion'
-        required: true
       skip_tests:
-        description: 'Skip staging tests (use only if staging is already validated)'
+        description: 'Emergency override: Skip staging tests (use only if staging is already validated)'
         required: false
         default: false
         type: boolean
@@ -23,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'PROMOTE') ||
+      (github.event_name == 'workflow_dispatch') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     
     steps:
@@ -43,12 +40,18 @@ jobs:
       run: |
         echo "✅ Staging smoke tests passed - proceeding with auto-promotion to production"
 
+    - name: Auto-promotion to production
+      if: github.event_name == 'workflow_run'
+      run: |
+        echo "� Staging smoke tests passed - automatically promoting to production"
+        echo "📋 Trigger: Automatic after staging tests"
+        echo "✅ No manual intervention required"
+
     - name: Manual promotion confirmation
       if: github.event_name == 'workflow_dispatch'
       run: |
-        echo "🔒 Manual promotion to production confirmed"
+        echo "🔧 Manual promotion to production triggered"
         echo "📋 Trigger: ${{ github.event_name }}"
-        echo "🎯 Confirmation: ${{ github.event.inputs.confirmation }}"
         echo "⚡ Skip tests: ${{ github.event.inputs.skip_tests }}"
 
     - name: Auto-promote staging to main branch
@@ -56,7 +59,7 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          console.log('🎯 All staging smoke tests passed! Auto-promoting staging to main branch...');
+          console.log('🚀 All staging smoke tests passed! Auto-promoting staging to main for production deployment...');
           
           // Create a merge from staging to main
           try {
@@ -99,9 +102,9 @@ jobs:
         echo "### 🎮 Deployment Status" >> $GITHUB_STEP_SUMMARY
         
         # Use canonical domain format (these are the Knative domains)
-        DEV_URL="https://game-2048-dev.game-2048-dev.dev.wa.darknex.us"
-        STAGING_URL="https://game-2048-staging.game-2048-staging.staging.wa.darknex.us"
-        PROD_URL="https://game-2048-prod.game-2048-prod.wa.darknex.us"
+        DEV_URL="https://${{ secrets.DEV_DOMAIN }}"
+        STAGING_URL="https://${{ secrets.STAGING_DOMAIN }}"
+        PROD_URL="https://${{ secrets.PROD_DOMAIN }}"
         
         echo "- **Development**: ✅ Live at $DEV_URL" >> $GITHUB_STEP_SUMMARY
         echo "- **Staging**: ✅ Live at $STAGING_URL" >> $GITHUB_STEP_SUMMARY

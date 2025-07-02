@@ -15,7 +15,7 @@ The following secrets must be configured in your GitHub repository:
 2. **DEV_WEBHOOK_URL** - Development webhook endpoint
 3. **STAGING_WEBHOOK_URL** - Staging webhook endpoint  
 4. **PROD_WEBHOOK_URL** - Production webhook endpoint
-5. **KNATIVE_DOMAIN** - Your Knative domain (e.g., `dev.wa.darknex.us`)
+5. **KNATIVE_DOMAIN** - Your Knative domain (e.g., `dev.${BASE_DOMAIN}`)
 
 ### Testing the Pipeline
 

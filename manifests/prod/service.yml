@@ -15,7 +15,7 @@ spec:
         autoscaling.knative.dev/target: "100"
     spec:
       containers:
-      - image: ghcr.io/ghndrx/k8s-game-2048:latest
+      - image: ${CONTAINER_REGISTRY}/${GITHUB_REPOSITORY}:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80

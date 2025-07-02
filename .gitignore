@@ -55,10 +55,36 @@ pids
 *.pid
 *.seed
 *.pid.lock
-
+cleanup-*
 # Coverage directory used by tools like istanbul
 coverage/
 
 # Build outputs
 dist/
 build/
+
+# Personal Information (PII) and sensitive files
+# These files may contain personal domains, emails, or secrets
+*.personal
+*.private
+personal-*
+private-*
+
+# Any files with actual domain/email configurations
+# (should use .env instead)
+actual-domains.txt
+domain-config.txt
+email-config.txt
+
+# Generated files from environment substitution
+*.env.resolved
+*.resolved.yaml
+*.resolved.yml
+
+# Temporary files from cleanup/setup scripts
+*.tmp
+*.temp
+cleanup-*.log
+setup-*.log
+
+verify-*

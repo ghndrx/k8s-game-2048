@@ -1,6 +1,8 @@
 name: Deploy to Production
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -8,17 +10,12 @@ on:
         required: false
         default: 'latest'
       confirmation:
-        description: 'Type "DEPLOY" to confirm production deployment'
+        description: 'Type "DEPLOY" to confirm manual production deployment'
         required: true
       source_environment:
         description: 'Source environment (staging or manual)'
         required: false
         default: 'staging'
-  workflow_run:
-    workflows: ["Deploy to Staging"]
-    types:
-      - completed
-    branches: [ main, master ]
 
 env:
   REGISTRY: ghcr.io
@@ -30,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'DEPLOY') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     
     steps:
     - name: Checkout repository
@@ -40,9 +37,11 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           IMAGE_TAG="${{ github.event.inputs.image_tag || 'latest' }}"
+          echo "🔧 Manual production deployment with image: $IMAGE_TAG"
         else
-          # For production deployment, use the main branch commit tag
+          # For automatic production deployment, use the main branch commit tag
           IMAGE_TAG="main-$(echo "${{ github.sha }}" | cut -c1-7)"
+          echo "🚀 Automatic production deployment with image: $IMAGE_TAG"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "Deploying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"

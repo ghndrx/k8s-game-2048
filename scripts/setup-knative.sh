@@ -48,7 +48,7 @@ echo "🌐 Configuring domain..."
 kubectl patch configmap/config-domain \
   --namespace knative-serving \
   --type merge \
-  --patch '{"data":{"wa.darknex.us":""}}'
+  --patch "{\"data\":{\"${KNATIVE_DOMAIN}\":\"\"}}"
 
 echo "✅ Knative Serving installation completed!"
 echo ""
